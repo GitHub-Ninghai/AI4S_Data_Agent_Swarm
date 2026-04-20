@@ -30,7 +30,7 @@
       "将探针脚本验证结果写入 scripts/sdk-probe-report.md。",
       "验证方式：运行 tsx scripts/sdk-probe.ts 无崩溃，sdk-probe-report.md 有 7 项验证结论。"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 3,
