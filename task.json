@@ -1,0 +1,1422 @@
+[
+  {
+    "id": 1,
+    "title": "项目初始化：目录结构与基础配置",
+    "description": "创建整个项目的目录骨架，包括 server/、web/、data/、hooks/、scripts/ 等，初始化 package.json、tsconfig.json 等配置文件。",
+    "steps": [
+      "在项目根目录创建 server/、web/、data/events/、data/logs/、hooks/、scripts/ 目录。",
+      "初始化根目录 package.json（workspaces 或独立脚本入口）。",
+      "初始化 server/package.json，声明依赖：express、ws、@anthropic-ai/claude-agent-sdk、tsx、typescript、proper-lockfile、p-queue 等。",
+      "创建 server/tsconfig.json，配置 target ES2022、module NodeNext、strict 等。",
+      "初始化 web/package.json，声明依赖：react、vite、typescript 等。",
+      "创建 .env.example，包含 PORT=3456、MAX_CONCURRENT_TASKS=10、MAX_WS_CLIENTS=10、TOOL_APPROVAL_TIMEOUT_MS=300000、USER_MESSAGE_TIMEOUT_MS=1800000。",
+      "创建 .gitignore，忽略 node_modules/、.env、data/logs/、dist/。",
+      "验证方式：运行 ls 可看到完整目录结构，npm install 在 server/ 和 web/ 下均可成功执行。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 2,
+    "title": "SDK 集成验证：编写探针脚本",
+    "description": "在任何开发工作开始前，编写 scripts/sdk-probe.ts 验证 @anthropic-ai/claude-agent-sdk 的 7 个关键假设，避免后续返工。",
+    "steps": [
+      "安装 @anthropic-ai/claude-agent-sdk，确认 npm install 可成功安装。",
+      "验证假设1：query() 参数签名与文档一致，构造最小 query() 调用并打印消息结构。",
+      "验证假设2：SDKSystemMessage subtype 'init' 包含 session_id，消费消息流并打印第一条 system 消息。",
+      "验证假设3：abortSignal 参数被 SDK 支持，创建 AbortController，调用 abort() 后确认流停止。",
+      "验证假设4：resume 机制可从外部发起新 query({ options: { resume: sessionId } })，验证恢复会话可继续。",
+      "验证假设5：canUseTool 可阻塞等待（内部 delay 3 秒），确认 SDK 等待回调 resolve 后继续执行。",
+      "验证假设6：预算超限行为，设置 maxBudgetUsd=0.001，观察是返回 ResultMessage 还是抛出异常。",
+      "将探针脚本验证结果写入 scripts/sdk-probe-report.md。",
+      "验证方式：运行 tsx scripts/sdk-probe.ts 无崩溃，sdk-probe-report.md 有 7 项验证结论。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 3,
+    "title": "后端：JSON 数据存储基础设施（safeWrite + 文件锁 + 迁移）",
+    "description": "实现线程安全的 JSON 文件读写工具，包含文件锁、临时文件 rename、异步写入队列和 schema 版本迁移机制。",
+    "steps": [
+      "创建 server/store/fileStore.ts，实现 safeWrite(filePath, data) 函数：先写 .tmp 临时文件再 rename，使用 proper-lockfile 加文件锁。",
+      "使用 p-queue（concurrency: 1）创建 FileStore 类，所有写操作入队串行执行。",
+      "实现 loadJson(filePath, defaultValue) 函数：文件不存在时返回默认值并初始化文件。",
+      "实现 schema 版本迁移框架：读取 _schema_version 字段，依次执行 MIGRATIONS[version]() 直到最新版本。",
+      "初始化 data/agents.json、data/tasks.json、data/sessions.json、data/projects.json（内容为 { '_schema_version': 1, 'agents': [] } 等对应结构）。",
+      "验证方式：并发写入 100 次，读取文件数据无损坏；重命名后 tmp 文件不残留。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 4,
+    "title": "后端：内存状态管理（agents/tasks/sessions/projects Map）",
+    "description": "在 Server 启动时从 JSON 文件加载数据到内存 Map，所有运行时读写操作先操作内存再异步持久化。",
+    "steps": [
+      "创建 server/store/agentStore.ts：定义 agents: Map<string, Agent>，提供 getAll、getById、create、update、delete 方法。",
+      "创建 server/store/taskStore.ts：定义 tasks: Map<string, Task>，提供 getAll、getById、create、update、delete、query（过滤/分页）方法。",
+      "创建 server/store/sessionStore.ts：定义 sessions: Map<string, Session>，提供 getByTaskId、create、update 方法；运行时字段（abortController、pendingToolApproval）单独维护在内存 Map 中，不持久化。",
+      "创建 server/store/projectStore.ts：定义 projects: Map<string, Project>，提供 CRUD 方法。",
+      "在各 store 的写方法中，操作内存后调用 FileStore.save() 异步持久化。",
+      "创建 server/store/index.ts 统一导出，Server 启动时调用 loadAll() 从磁盘初始化各 Map。",
+      "验证方式：启动 Server 后 GET /api/agents 返回空数组；重启后数据仍存在。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 5,
+    "title": "后端：Express Server 入口与基础中间件",
+    "description": "创建 server/index.ts，初始化 Express App，注册 CORS、JSON 解析、错误处理中间件，启动 HTTP Server。",
+    "steps": [
+      "创建 server/index.ts，初始化 Express app。",
+      "注册 express.json({ limit: '10mb' }) 中间件。",
+      "注册 CORS 中间件，允许来自 localhost 的请求（含前端 Vite dev server 端口 5173）。",
+      "读取 .env 环境变量（PORT、MAX_CONCURRENT_TASKS 等），PORT 默认 3456。",
+      "实现统一错误处理中间件，将所有错误格式化为 { error: { code, message, details } }。",
+      "实现 GET /api/health 路由，返回 { status: 'ok', version, uptime, activeTaskCount, sdkAvailable, storageOk }。",
+      "启动 HTTP Server 监听 127.0.0.1:3456，打印启动日志。",
+      "验证方式：启动 Server 后访问 http://localhost:3456/api/health 返回 { status: 'ok' }。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 6,
+    "title": "后端：WebSocket Server 与广播服务",
+    "description": "创建 WebSocket Server（与 HTTP 同端口 upgrade），实现 wsBroadcaster.ts，支持向所有已连接客户端广播消息，并限制最大连接数。",
+    "steps": [
+      "在 server/index.ts 中通过 server.on('upgrade') 集成 ws 库的 WebSocket.Server。",
+      "实现并发连接数限制：超过 MAX_WS_CLIENTS（默认 10）时拒绝新连接并发送关闭消息。",
+      "创建 server/services/wsBroadcaster.ts，维护当前连接客户端列表，提供 broadcast(type, data) 方法。",
+      "broadcast 方法遍历所有已连接的 ws 客户端，仅向 readyState === OPEN 的客户端发送。",
+      "消息格式：{ type: string, data: object }，序列化为 JSON 字符串发送。",
+      "实现 WebSocket 心跳检测（ping/pong），移除断线的客户端。",
+      "验证方式：使用 wscat 连接 ws://localhost:3456/ws，服务端广播后客户端可收到 JSON 消息。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 7,
+    "title": "后端：Project 管理 API（CRUD）",
+    "description": "实现 server/routes/projects.ts，完成 Project 的增删改查 REST API，包含路径校验和 Running Task 删除保护。",
+    "steps": [
+      "实现 GET /api/projects，返回 { projects: Project[] }。",
+      "实现 POST /api/projects，接收 { name, path, description? }，校验 name 只含 [a-zA-Z0-9_-]，校验 path 是绝对路径且存在，生成 id（UUID）、createdAt、updatedAt，写入 projectStore，返回 { project }。",
+      "实现 PUT /api/projects/:id，接收可选字段 name/path/description，同样校验 name 和 path，更新 updatedAt，返回 { project }。",
+      "实现 DELETE /api/projects/:id，校验是否存在状态为 Running 或 Stuck 的 Task，若有则返回 409 RESOURCE_HAS_DEPENDENTS；否则删除 project，返回 { ok: true }。",
+      "不存在的 id 返回 404 PROJECT_NOT_FOUND。",
+      "验证方式：POST 创建一个 Project，GET 可返回，PUT 修改 description，DELETE 成功后 GET 返回空列表。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 8,
+    "title": "后端：Agent 管理 API — GET /api/agents 与 GET /api/agents/:id",
+    "description": "实现 Agent 列表查询和单 Agent 查询接口。",
+    "steps": [
+      "创建 server/routes/agents.ts，注册路由到 /api/agents。",
+      "实现 GET /api/agents，从 agentStore 返回全部 Agent 数组，格式为 { agents: Agent[] }。",
+      "实现 GET /api/agents/:id，从 agentStore 查找指定 id，不存在返回 404 AGENT_NOT_FOUND，存在返回 { agent }。",
+      "验证方式：手动写入 agents.json 中添加一个 Agent 记录，重启 Server 后 GET /api/agents 可返回该 Agent；GET /api/agents/nonexistent 返回 404。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 9,
+    "title": "后端：Agent 管理 API — POST /api/agents（创建）",
+    "description": "实现 Agent 创建接口，接收角色信息与资源配置，生成完整 Agent 对象并持久化。",
+    "steps": [
+      "实现 POST /api/agents，接收 { name, avatar, role, prompt, projectId?, maxTurns?, maxBudgetUsd?, allowedTools? }。",
+      "校验必填字段：name（1-50字符）、avatar（非空）、role（1-200字符）、prompt（10-5000字符），校验失败返回 400 VALIDATION_ERROR。",
+      "生成字段：id（UUID v4）、status（'idle'）、isEnabled（true）、taskCount（0）、stats（全0）、lastEventAt（0）、createdAt/updatedAt（Date.now()）。",
+      "maxTurns 默认 200，maxBudgetUsd 默认 5.0，allowedTools 默认 ['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob', 'WebFetch']。",
+      "写入 agentStore，广播 WebSocket agent:update，返回 { agent }。",
+      "验证方式：POST 后 GET /api/agents 可看到新 Agent，重启 Server 后数据仍存在。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 10,
+    "title": "后端：Agent 管理 API — PUT /api/agents/:id（编辑）",
+    "description": "实现 Agent 编辑接口，支持更新名称、头像、角色、提示词、资源配置等字段。",
+    "steps": [
+      "实现 PUT /api/agents/:id，接收 { name?, avatar?, role?, prompt?, projectId?, maxTurns?, maxBudgetUsd?, allowedTools?, isEnabled? }。",
+      "校验字段长度规则（与创建相同）。",
+      "不存在的 id 返回 404 AGENT_NOT_FOUND。",
+      "仅更新请求体中提供的字段，更新 updatedAt。",
+      "若 isEnabled 从 true 改为 false，且 Agent 当前无 Running 任务，则 status 变更为 offline。",
+      "广播 WebSocket agent:update，返回 { agent }。",
+      "验证方式：PUT 修改 prompt 后 GET /api/agents/:id 返回新 prompt；PUT 设置 isEnabled=false 后 status 变为 offline。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 11,
+    "title": "后端：Agent 管理 API — DELETE /api/agents/:id（删除）",
+    "description": "实现 Agent 删除接口，仅当无 Running 任务时允许删除。",
+    "steps": [
+      "实现 DELETE /api/agents/:id。",
+      "校验该 Agent 是否存在，不存在返回 404 AGENT_NOT_FOUND。",
+      "查询 taskStore，若该 Agent 有 status 为 Running 或 Stuck 的 Task，返回 409 RESOURCE_HAS_DEPENDENTS，提示 '请先停止所有运行中的任务'。",
+      "删除 agentStore 中的 Agent，写入磁盘，广播 WebSocket agent:update（携带 deleted: true）。",
+      "返回 { ok: true }。",
+      "验证方式：删除有 Running Task 的 Agent 返回 409；删除 idle Agent 成功，GET /api/agents 列表中不再包含该 Agent。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 12,
+    "title": "后端：Agent 统计 API — GET /api/agents/:id/stats",
+    "description": "返回指定 Agent 的历史执行统计和最近 Task 列表。",
+    "steps": [
+      "实现 GET /api/agents/:id/stats。",
+      "从 agentStore 读取 agent.stats（totalTasksCompleted、totalTasksCancelled、totalCostUsd、avgDurationMs）。",
+      "查询 taskStore，筛选 agentId 等于该 Agent 且已完成的最近 10 条 Task（按 completedAt 降序）作为 recentTasks。",
+      "返回 { totalTasksCompleted, totalTasksCancelled, totalCostUsd, avgDurationMs, recentTasks }。",
+      "验证方式：创建 Agent 后 GET stats 返回全0统计；完成一个 Task 后 stats 中 totalTasksCompleted 增加 1。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 13,
+    "title": "后端：Task 管理 API — POST /api/tasks（创建）",
+    "description": "实现 Task 创建接口，校验 Agent 和 Project 存在，继承资源配置，初始化 Todo 状态。",
+    "steps": [
+      "实现 POST /api/tasks，接收 { title, description, agentId, projectId, priority?, tags?, maxTurns?, maxBudgetUsd? }。",
+      "校验必填字段：title（1-100字符）、description（10-10000字符）、agentId、projectId；失败返回 400 VALIDATION_ERROR。",
+      "校验 agentId 对应的 Agent 是否存在，不存在返回 404 AGENT_NOT_FOUND。",
+      "校验 projectId 对应的 Project 是否存在，不存在返回 404 PROJECT_NOT_FOUND。",
+      "生成字段：id（UUID）、status（'Todo'）、eventCount（0）、turnCount（0）、budgetUsed（0）、createdAt（Date.now()）。",
+      "maxTurns 不填则继承 agent.maxTurns（默认 200），maxBudgetUsd 不填则继承 agent.maxBudgetUsd（默认 5.0）。",
+      "priority 默认 1（中），tags 默认 []。",
+      "写入 taskStore，更新 Agent.taskCount（+1），广播 WebSocket task:update 和 agent:update，返回 { task }。",
+      "验证方式：POST 后 GET /api/tasks 可看到新 Task，status 为 Todo，看板 Todo 列显示该 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 14,
+    "title": "后端：Task 管理 API — GET /api/tasks（列表查询，含分页过滤）",
+    "description": "实现 Task 列表查询接口，支持 projectId/status/agentId/keyword 过滤、分页和排序。",
+    "steps": [
+      "实现 GET /api/tasks，读取查询参数：projectId、status（支持逗号分隔多值）、agentId、q（关键词）、page（默认1）、limit（默认20，最大100）、sort（默认 createdAt）、order（默认 desc）。",
+      "对 taskStore 中所有 Task 依次应用过滤条件：projectId 过滤、status 过滤、agentId 过滤、q 对 title+description 做大小写不敏感 includes 搜索。",
+      "默认过滤 deletedAt 不为空的软删除 Task（除非请求方加 includeDeleted=true 参数）。",
+      "按 sort/order 字段排序，计算 total、totalPages，截取当前页数据。",
+      "返回 { tasks: Task[], total, page, limit, totalPages }。",
+      "验证方式：创建 5 个 Task，GET ?status=Todo 只返回 Todo 状态的 Task；GET ?q=爬取 只返回标题含 '爬取' 的 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 15,
+    "title": "后端：Task 管理 API — GET /api/tasks/:id 与 PUT /api/tasks/:id",
+    "description": "实现单 Task 查询和字段编辑接口，PUT 遵守字段编辑规则（Running 状态下限制编辑 agentId 等）。",
+    "steps": [
+      "实现 GET /api/tasks/:id，不存在返回 404 TASK_NOT_FOUND，存在返回 { task }。",
+      "实现 PUT /api/tasks/:id，接收 { title?, description?, agentId?, priority?, tags?, maxTurns?, maxBudgetUsd? }。",
+      "校验 Task 存在，不存在返回 404。",
+      "若 Task 状态为 Running/Stuck，禁止修改 agentId，返回 409 并提示 '运行中的任务不可更换 Agent'。",
+      "若修改 agentId（Task 为 Todo 状态），验证新 Agent 存在；更新原 Agent taskCount(-1)，更新新 Agent taskCount(+1)。",
+      "更新 updatedAt，写入 taskStore，广播 WebSocket task:update（若 agentId 变更，同时广播两个 agent:update），返回 { task }。",
+      "验证方式：PUT 修改 Todo Task 的 agentId，GET 返回新 agentId；PUT 修改 Running Task 的 agentId 返回 409。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 16,
+    "title": "后端：Task 管理 API — DELETE /api/tasks/:id（含软删除）",
+    "description": "实现 Task 删除接口，Running/Stuck 状态拒绝删除，Done 状态做软删除。",
+    "steps": [
+      "实现 DELETE /api/tasks/:id。",
+      "校验 Task 存在，不存在返回 404 TASK_NOT_FOUND。",
+      "若 status 为 Running 或 Stuck，返回 409 TASK_ALREADY_RUNNING，提示 '请先停止 Task'。",
+      "若 status 为 Done 或 Cancelled，进行软删除：设置 deletedAt = Date.now()，写入 taskStore（保留记录）。",
+      "若 status 为 Todo，直接硬删除，更新 Agent.taskCount(-1)。",
+      "广播 WebSocket task:update（携带 deleted: true），返回 { ok: true }。",
+      "验证方式：删除 Running Task 返回 409；删除 Done Task 后 GET /api/tasks（默认）不返回该 Task，但加 ?includeDeleted=true 可看到。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 17,
+    "title": "后端：SDK queryWrapper — 封装 query() 调用与 canUseTool 回调",
+    "description": "创建 server/sdk/queryWrapper.ts，封装 Claude Agent SDK 的 query() 调用，包含完整的 canUseTool 回调逻辑（自动批准规则、Stuck 标记、用户决策等待、超时保护）。",
+    "steps": [
+      "创建 server/sdk/queryWrapper.ts，导出 startQuery(task, agent, projectDir) 函数，构建 query() 所需的完整参数。",
+      "systemPrompt 参数：{ type: 'preset', preset: 'claude_code', append: agent.prompt }。",
+      "实现 isAutoAllowed(toolName, input) 函数：Read/Glob/Grep 自动批准；Bash 命令不含危险关键词（rm -rf、format、del /s、shutdown）时自动批准；其余返回 false。",
+      "实现 createCanUseToolCallback(taskId)：自动批准时直接返回 { behavior: 'allow' }；需要人工审批时调用 markTaskStuck()、broadcastToolApproval()，然后用 Promise.race 阻塞等待用户决策与 TOOL_APPROVAL_TIMEOUT_MS 超时（超时后自动 deny）。",
+      "维护 pendingDecisions: Map<taskId, { resolve }>，供用户决策时 resolve。",
+      "实现 resolveToolDecision(taskId, decision: 'allow' | 'deny') 方法，供 approve-tool API 调用。",
+      "创建 AbortController，传入 query() 的 abortSignal 参数，返回 { stream, abortController }。",
+      "验证方式：启动一个 Task，canUseTool 被调用时前端收到 tool:approval WebSocket 消息；调用 approve-tool API 后 Task 继续执行。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 18,
+    "title": "后端：SDK messageParser — SDK 消息流转换为 Event",
+    "description": "创建 server/sdk/messageParser.ts，将 SDKMessage 转换为系统 Event 对象，处理 SDKInit、SDKAssistant（工具调用/文本）、SDKResult 三种消息类型。",
+    "steps": [
+      "创建 server/sdk/messageParser.ts，导出 parseMessage(taskId, sessionId, message) 函数，返回 Event | null。",
+      "处理 SDKSystemMessage(subtype: 'init')：生成 eventType='SDKInit' Event，记录 session_id。",
+      "处理 SDKAssistantMessage：遍历 content 块，工具调用块生成 eventType='SDKAssistant' Event，填充 toolName、toolInput（JSON 字符串截断至 10KB）、toolOutput 摘要；文本块单独生成 Event 记录输出摘要。",
+      "处理带 result 字段的 SDKResultMessage：生成 eventType='SDKResult' Event，记录 output（结果文本）、费用信息。",
+      "所有 Event 带 id（UUID）、taskId、sessionId、source='sdk'、timestamp=Date.now()、raw（截断原始 JSON）。",
+      "验证方式：输入一个模拟的 SDKAssistantMessage，parseMessage 返回含 toolName 和 toolInput 的 Event 对象。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 19,
+    "title": "后端：SDKSessionManager — 基础框架与 startTask/bindSession",
+    "description": "创建 SDKSessionManager 类的基础框架，维护 activeQueries 映射，实现 startTask（启动 SDK 查询并注册到映射表）和 bindSession（通过 session_id 绑定 Task）。",
+    "steps": [
+      "创建 server/services/sdkSessionManager.ts，定义 SDKSessionManager 类，维护 activeQueries: Map<taskId, { stream, abortController, sessionId? }>。",
+      "实现 startTask(task, agent, projectDir)：调用 queryWrapper.startQuery() 获取 stream 和 abortController，注册到 activeQueries，启动 consumeStream() 后台协程（不 await），返回 Promise<void>。",
+      "实现 bindSession(taskId, sessionId)：更新 Task.sessionId 字段，建立 sessionId → taskId 反向映射（sessionReverseMap: Map<sessionId, taskId>），广播 WebSocket task:update。",
+      "在构造函数中注入 taskStore、sessionStore、wsBroadcaster 依赖。",
+      "实现 getByTaskId(taskId) 方法：返回 activeQueries 中的条目，供其他模块查询。",
+      "实现 getTaskIdBySession(sessionId) 方法：通过反向映射查找 taskId。",
+      "验证方式：调用 startTask 后 activeQueries 有记录且 stream 存在；收到 SDKInit 后 bindSession 正确写入 sessionId 并建立双向映射。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 20,
+    "title": "后端：TaskManager — 核心状态迁移（start/complete/cancel/done）",
+    "description": "创建 TaskManager 类，实现 Task 的主要生命周期状态迁移：启动、完成、取消、手动标记完成，包含并发约束校验和 Agent 状态联动。",
+    "steps": [
+      "创建 server/services/taskManager.ts，定义 TaskManager 类，注入 taskStore、agentStore、sdkSessionManager、wsBroadcaster 依赖。",
+      "实现 startTask(taskId)：验证 Task 为 Todo、Agent 为 idle，检查并发上限（MAX_CONCURRENT_TASKS）和 Agent 单 Task 约束，调用 sdkSessionManager.startTask()，Task 状态 → Running、startedAt → Date.now()，Agent 状态 → working，广播 task:update + agent:update。",
+      "实现 completeTask(taskId, reason, output?)：Task Running/Stuck → Done，Agent 状态 → idle（若无其他 Running 任务），更新 completedAt、output、completedReason，更新 agent.stats（totalTasksCompleted++、totalCostUsd += budgetUsed、avgDurationMs 重新计算），广播 task:update + agent:update。",
+      "实现 cancelTask(taskId)：调用 sdkSessionManager.stopTask()，Task Running/Stuck → Cancelled，completedReason = 'user_cancelled'，Agent → idle（若无其他 Running 任务），更新 Agent.taskCount(-1)，更新 completedAt，广播。",
+      "实现 doneTask(taskId)：调用 sdkSessionManager.stopTask()，Task Running/Stuck → Done，completedReason = 'user_done'，其余逻辑同 completeTask。",
+      "实现私有辅助方法 updateAgentStatus(agentId)：检查该 Agent 是否还有 Running/Stuck 的 Task，若无则 Agent → idle，否则保持当前状态。",
+      "验证方式：Todo Task 调用 startTask 后状态变为 Running，Agent 变为 working；Running Task 调用 cancelTask 后状态变为 Cancelled，Agent 变为 idle。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 21,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/start",
+    "description": "实现启动 Task 的 REST 接口，调用 TaskManager.startTask()，并校验 Agent 是否空闲。",
+    "steps": [
+      "实现 POST /api/tasks/:id/start 路由。",
+      "校验 Task 存在且状态为 Todo，否则返回 409 TASK_ALREADY_RUNNING。",
+      "校验对应 Agent 的状态是否为 idle，不是则返回 409 AGENT_BUSY，消息体含当前执行的 taskTitle。",
+      "调用 taskManager.startTask(taskId)，该方法内部调用 sdkSessionManager.startTask()。",
+      "注意：SDK query() 为异步，Task 状态先同步变为 Running，sessionId 通过 WebSocket 异步通知。",
+      "返回 { task }（status 已为 Running）。",
+      "验证方式：调用 start 后 Task 状态变为 Running，Agent 状态变为 working；尝试为同一 Agent 启动第二个 Task 返回 409 AGENT_BUSY。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 22,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/stop",
+    "description": "实现停止 Task（取消）的 REST 接口。",
+    "steps": [
+      "实现 POST /api/tasks/:id/stop 路由。",
+      "校验 Task 存在且状态为 Running 或 Stuck，否则返回 409。",
+      "调用 taskManager.cancelTask(taskId)：中止 SDK 消息流，Task → Cancelled，Agent → idle。",
+      "返回 { task }。",
+      "验证方式：Running Task 调用 stop 后状态变为 Cancelled，tmux session（或 activeQueries 记录）不再存在。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 23,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/done（手动标记完成）",
+    "description": "实现手动标记 Task 为 Done 的接口。",
+    "steps": [
+      "实现 POST /api/tasks/:id/done 路由。",
+      "校验 Task 存在，状态为 Running 或 Stuck，否则返回 409。",
+      "调用 taskManager.doneTask(taskId)：中止 SDK 流，Task → Done，completedReason = 'user_done'，Agent → idle。",
+      "返回 { task }。",
+      "验证方式：Running Task 调用 done 后状态变为 Done，completedReason 为 'user_done'，Agent 状态变为 idle。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 24,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/message（人工介入）",
+    "description": "实现向 Stuck Task 发送自定义消息的接口，通过 SDK resume 机制恢复会话，同时支持附带工具审批决策。",
+    "steps": [
+      "实现 POST /api/tasks/:id/message，接收 { message: string, allowTool?: { toolName, decision } }。",
+      "校验 Task 存在且状态为 Stuck，否则返回 409。",
+      "若请求体包含 allowTool，先调用 queryWrapper.resolveToolDecision(taskId, decision)，处理待决策的工具调用。",
+      "调用 sdkSessionManager.sendMessage(taskId, task.sessionId, message)，通过 resume 机制创建新 stream。",
+      "调用 taskManager.resumeTask(taskId)：Task Stuck → Running，Agent stuck → working，广播 task:update + agent:update。",
+      "返回 { ok: true }。",
+      "验证方式：Stuck Task 调用 message 后状态变为 Running，Agent 状态变为 working；SDK 继续执行并产生新事件。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 25,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/approve-tool（工具审批）",
+    "description": "实现单独审批被拦截工具调用的接口，解除 canUseTool 的阻塞。",
+    "steps": [
+      "实现 POST /api/tasks/:id/approve-tool，接收 { toolName, toolInput, decision: 'allow' | 'deny' }。",
+      "校验 Task 存在且状态为 Stuck。",
+      "调用 queryWrapper.resolveToolDecision(taskId, decision)，resolve 对应的 Promise，使 canUseTool 回调返回结果。",
+      "若 decision = 'allow'，将 (toolName, hash(toolInput)) 加入该 Task 的自动批准缓存，当前任务生命周期内同类调用自动批准。",
+      "调用 taskManager.resumeTask(taskId)：Task Stuck → Running，广播 task:update + agent:update。",
+      "返回 { ok: true }。",
+      "验证方式：Stuck Task 调用 approve-tool?decision=allow 后 Task 变为 Running，canUseTool 回调以 allow 返回，SDK 继续执行。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 26,
+    "title": "后端：Task 管理 API — POST /api/tasks/:id/retry（重试）",
+    "description": "实现 Task 重试接口，复制原 Task 配置创建新 Task，title 追加 '(重试)'，parentTaskId 指向原 Task。",
+    "steps": [
+      "实现 POST /api/tasks/:id/retry 路由。",
+      "校验原 Task 存在，且状态为 Done、Cancelled 之一，否则返回 409。",
+      "以原 Task 的 title+'(重试)'、description、agentId、projectId、maxTurns、maxBudgetUsd、priority、tags 创建新 Task，新 Task 状态为 Todo。",
+      "新 Task 的 parentTaskId 设为原 Task.id，原 Task 状态不变。",
+      "写入 taskStore，更新 Agent.taskCount(+1)，广播 task:update（新 Task），返回 { task }（新 Task）。",
+      "验证方式：Done Task 调用 retry 返回新 Task，新 Task.parentTaskId = 原 Task.id，title 含 '(重试)'，状态为 Todo。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 27,
+    "title": "后端：Task Event 查询 API — GET /api/tasks/:id/events",
+    "description": "实现 Task 事件分页查询接口，从对应的 JSONL 文件中读取事件，支持类型过滤和分页。",
+    "steps": [
+      "实现 GET /api/tasks/:id/events，接收 page（默认1）、limit（默认50）、type（可选事件类型过滤）。",
+      "从 data/events/<taskId>.jsonl 文件逐行读取（考虑大文件性能，可用流式读取）。",
+      "若存在归档文件 <taskId>.jsonl.gz，先读取归档文件再读取未归档文件，合并后分页。",
+      "按 type 过滤（若提供），计算 total、page、limit，返回指定页数据。",
+      "返回 { events: Event[], total, page, limit }。",
+      "验证方式：启动一个 Task 后产生若干事件，GET events 可返回按时间排序的事件列表；指定 type=SDKAssistant 只返回对应类型事件。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 28,
+    "title": "后端：Task SDK 状态 API — GET /api/tasks/:id/sdk-status",
+    "description": "实现实时查询 Task SDK 运行状态的接口，返回轮次数、预算消耗等信息。",
+    "steps": [
+      "实现 GET /api/tasks/:id/sdk-status。",
+      "从 sdkSessionManager.activeQueries 或 taskStore 读取 running（是否有活跃查询）、turnCount、budgetUsed、maxBudgetUsd。",
+      "返回 { running, turnCount, budgetUsed, maxBudgetUsd }。",
+      "验证方式：启动 Task 后 GET sdk-status 返回 running=true；Task 完成后返回 running=false。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 29,
+    "title": "后端：事件处理器 — EventProcessor（去重、duration 计算、JSONL 写入）",
+    "description": "创建 server/services/eventProcessor.ts，处理所有到达的 Event：去重（同一 tool_use_id 不重复）、计算 duration（PostToolUse 与 PreToolUse 时间差）、写入 JSONL 文件、触发 WebSocket 广播。",
+    "steps": [
+      "创建 server/services/eventProcessor.ts，维护 processedIds: Set<string> 内存集合用于去重。",
+      "实现 processEvent(event: Event)：若 event.id 已在 processedIds 中则跳过；否则加入集合，继续处理。",
+      "计算 duration：若 eventType='PostToolUse'（或 SDKAssistant 包含工具调用完成信息），查找对应 PreToolUse Event 的 timestamp 计算耗时，填入 event.duration。",
+      "将 Event 追加写入 data/events/<taskId>.jsonl（每行一个 JSON）。",
+      "更新 Task.eventCount(+1)，若 event 含费用信息则更新 Task.budgetUsed，广播 WebSocket event:new 和 task:budget。",
+      "检查 JSONL 文件是否超过 100MB，若超过则归档为 .jsonl.gz（异步压缩，不阻塞主流程）。",
+      "验证方式：同一 tool_use_id 的 Event 发送两次，processEvent 只处理一次；PostToolUse Event 的 duration 字段有值。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 30,
+    "title": "后端：Stuck 检测器 — StuckDetector（双通道）",
+    "description": "创建 server/services/stuckDetector.ts，集成 SDK canUseTool 回调（主通道）和 Hook Notification 关键词检测（补充通道）的 Stuck 检测逻辑。",
+    "steps": [
+      "创建 server/services/stuckDetector.ts，实现 isPermissionPrompt(event: Event) 函数：检测 event.toolOutput 是否含权限提示关键词（'Claude wants to'、'permission'、'Allow'、'Deny'、'approve'），大小写不敏感。",
+      "实现 handleHookEvent(event: Event)：若 eventType='Notification' 且 isPermissionPrompt 为 true，且对应 Task 当前状态为 Running，调用 taskManager.stuckTask() 标记为 Stuck（兜底通道）。",
+      "实现 isAutoAllowed(toolName, input) 函数（同 queryWrapper 中的逻辑，或复用）。",
+      "在 queryWrapper 的 canUseTool 回调中，调用 stuckDetector 的相关方法（主通道逻辑在 queryWrapper 中，stuckDetector 提供辅助工具方法）。",
+      "验证方式：发送包含 'Claude wants to' 的 Notification Hook 事件，对应 Task 状态变为 Stuck，前端收到 notification WebSocket 消息。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 31,
+    "title": "后端：Hook 事件接收端点 — POST /event（补充通道）",
+    "description": "实现 server/routes/events.ts，接收 Claude Code Hook 脚本上报的事件，经 stuckDetector 和 eventProcessor 处理后与 Task 关联。",
+    "steps": [
+      "创建 server/routes/events.ts，实现 POST /event 路由（注意路径没有 /api 前缀）。",
+      "接收 { hook_event_name, session_id, cwd, tool_name?, tool_input?, tool_output?, source: 'hook' }。",
+      "通过 session_id 从 sessionStore 查找对应 taskId（sessionId → taskId 映射）；若找不到则记录日志并返回 { ok: true }（忽略无法关联的事件）。",
+      "将 Hook 事件转换为内部 Event 对象（source='hook'），截断 tool_input 至 10KB。",
+      "调用 eventProcessor.processEvent(event)（含去重逻辑）。",
+      "调用 stuckDetector.handleHookEvent(event)（补充 Stuck 检测）。",
+      "追加原始数据到 data/logs/hooks.log（JSONL 格式）。",
+      "返回 { ok: true }。",
+      "验证方式：模拟 Hook 脚本 POST 一条 Stop 事件，对应 Task 状态变为 Done；POST 一条 Notification 事件（含权限关键词），对应 Task 变为 Stuck。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 32,
+    "title": "后端：Server 崩溃恢复机制",
+    "description": "实现 Server 启动时的状态恢复逻辑：将 Running 状态的 Task 恢复为 Stuck（有 sessionId）或 Cancelled（无 sessionId）。",
+    "steps": [
+      "在 server/index.ts 启动流程中，调用所有 store 的 loadAll()。",
+      "扫描所有 Task，找出 status 为 Running 的 Task：有 sessionId 的，将状态改为 Stuck，stuckReason = 'Server 重启，请点击恢复或重新启动'；无 sessionId 的，将状态改为 Cancelled，completedReason = 'error'，stuckReason = 'server_restart_no_session'。",
+      "对应 Agent 状态更新为 stuck（有 sessionId）或 idle（无 sessionId）。",
+      "将所有变更持久化到磁盘，广播 task:update 和 agent:update（等 WebSocket 连接就绪后广播）。",
+      "启动磁盘空间检查：若 data/ 目录所在分区可用空间低于 500MB，在日志中警告用户（不阻止启动）。",
+      "验证方式：人为 kill -9 Server，有活跃 Running Task 的情况下重启，该 Task 状态变为 Stuck，前端刷新后可看到 Stuck 状态。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 33,
+    "title": "后端：Hook 脚本与注册工具",
+    "description": "创建 hooks/eventHook.sh 事件转发脚本，以及 scripts/register-hooks.js 自动注册 Hook 到 Claude Code settings.json。",
+    "steps": [
+      "创建 hooks/eventHook.sh：从 stdin 读取 JSON，用 jq 提取字段，追加到 data/logs/hooks.log，通过 curl POST 到 http://localhost:3456/event，忽略错误（> /dev/null 2>&1）。",
+      "创建 scripts/register-hooks.js：读取 Claude Code settings.json 文件（路径从 claude --config-dir 或默认路径获取），向 hooks 字段中的 Stop、SessionStart、SessionEnd、Notification 事件注册 'bash ./hooks/eventHook.sh' 命令，跨平台兼容（Windows 用 powershell 方式）。",
+      "register-hooks.js 若 settings.json 不存在则创建；若 hooks 字段已有注册则跳过（幂等）。",
+      "Hook 脚本对 tool_input 做长度截断（最大 10KB）。",
+      "验证方式：运行 node scripts/register-hooks.js 后，Claude Code settings.json 中 hooks 字段包含 eventHook.sh 注册；手动运行 bash hooks/eventHook.sh 传入 JSON 数据后，hooks.log 有记录。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 34,
+    "title": "后端：日志策略与日志轮转",
+    "description": "实现 Server 运行日志写入与轮转，单文件超过 50MB 时自动轮转，保留最近 5 个文件。",
+    "steps": [
+      "在 server/index.ts 中配置日志输出同时写入 data/logs/server.log。",
+      "实现日志轮转工具函数：检查文件大小，若超过 50MB 则将文件重命名为 server.log.1（移位旧日志），最多保留 5 个轮转文件，删除第 6 个。",
+      "Server 启动时和每次写日志前调用轮转检查（或使用 setInterval 定期检查）。",
+      "hooks.log 同样实现相同的轮转策略。",
+      "验证方式：手动生成大日志文件触发轮转，轮转后 server.log 重置为小文件，历史文件保留（最多 5 个）。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 35,
+    "title": "前端：Vite + React + TypeScript 项目初始化",
+    "description": "在 web/ 目录初始化 React + Vite + TypeScript 前端项目，配置 Vite proxy 转发 API 请求，配置 CSP。",
+    "steps": [
+      "在 web/ 目录运行 npm create vite@latest，选择 React + TypeScript 模板。",
+      "配置 vite.config.ts：设置 server.proxy，将 '/api' 转发到 'http://localhost:3456'，'/ws' 升级为 websocket 转发。",
+      "安装并配置必要依赖：react、react-dom、@types/react、typescript 等。",
+      "在 index.html 中添加 CSP meta 标签，允许 localhost 的 connect-src（WebSocket + REST）。",
+      "配置最小屏幕宽度提示：在 App.tsx 中检测 window.innerWidth < 1280，显示 '请使用更大屏幕' 提示。",
+      "配置全局样式基础（CSS reset）。",
+      "验证方式：运行 npm run dev 后浏览器可访问 http://localhost:5173，页面正常加载，无控制台报错。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 36,
+    "title": "前端：REST API 客户端 — 基础封装与 Agent/Project API",
+    "description": "创建 API 客户端基础架构（request 函数、错误处理）并封装 Agent 和 Project 相关 API。",
+    "steps": [
+      "创建 web/src/api/client.ts，封装 fetch 的基础 request<T>(method, path, body?) 函数：自动加 Content-Type: application/json，处理非 2xx 响应（解析 error 字段并抛出带 code + message 的 ApiError 对象）。",
+      "创建 web/src/types.ts，定义共享 TypeScript 接口：Agent、AgentStats、Task、TaskStatus、Event、EventType、Project、WebSocketMessage 等类型（与后端数据模型对齐）。",
+      "实现 Agent API：getAgents() → Agent[]、getAgent(id) → Agent、createAgent(data) → Agent、updateAgent(id, data) → Agent、deleteAgent(id) → void、getAgentStats(id) → AgentStats。",
+      "实现 Project API：getProjects() → Project[]、createProject(data) → Project、updateProject(id, data) → Project、deleteProject(id) → void。",
+      "实现 getHealth() → HealthStatus。",
+      "所有函数返回类型化的 Promise，类型从 types.ts 导入。",
+      "验证方式：在组件中调用 api.getAgents()，控制台可看到正确的 HTTP 请求发出，返回类型化的 Agent 数组。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 37,
+    "title": "前端：WebSocket 客户端 Hook（web/src/hooks/useWebSocket.ts）",
+    "description": "实现 WebSocket 连接管理 Hook，支持自动重连（指数退避），订阅指定消息类型，更新全局应用状态。",
+    "steps": [
+      "创建 web/src/hooks/useWebSocket.ts，在组件挂载时连接 ws://localhost:3456/ws。",
+      "实现指数退避重连：初始延迟 1s，每次失败翻倍，最大 30s；断连时在全局状态标记 'connected: false'。",
+      "实现消息路由：解析收到的 JSON，根据 type 字段（task:update、agent:update、event:new、tool:approval、task:budget、notification、error）分发更新到对应状态。",
+      "task:update：更新全局 tasks 状态中对应 Task。",
+      "agent:update：更新全局 agents 状态中对应 Agent。",
+      "event:new：向对应 Task 的 events 列表追加新事件。",
+      "tool:approval：触发工具审批通知，设置 pendingApproval 状态。",
+      "notification：向通知队列追加通知（区分 Stuck 警告等类型）。",
+      "验证方式：后端广播 task:update，前端看板对应 Task 卡片状态立刻更新（无需刷新页面）。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 38,
+    "title": "前端：全局状态管理（Context + Reducer）",
+    "description": "设计全局应用状态结构，使用 React Context + useReducer 管理 agents、tasks、projects、notifications、wsConnected 等状态。",
+    "steps": [
+      "创建 web/src/store/AppContext.tsx，定义 AppState 接口：{ agents: Map<string, Agent>, tasks: Map<string, Task>, projects: Project[], selectedTaskId: string | null, selectedAgentId: string | null, notifications: Notification[], wsConnected: boolean, activeProjectId: string | null }。",
+      "实现 appReducer，处理 action 类型：SET_AGENTS、UPDATE_AGENT、SET_TASKS、UPDATE_TASK、SET_PROJECTS、SET_SELECTED_TASK、SET_SELECTED_AGENT、ADD_NOTIFICATION、DISMISS_NOTIFICATION、SET_WS_CONNECTED、SET_ACTIVE_PROJECT。",
+      "在 App.tsx 中用 AppProvider 包裹整个应用，启动时调用 API 加载初始数据（agents、tasks、projects）。",
+      "暴露 useAppState() 和 useAppDispatch() 两个 Hook。",
+      "验证方式：在 AgentPanel 组件中调用 useAppState().agents，可获取到从 API 加载的 Agent 列表。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 39,
+    "title": "前端：整体三栏布局（App.tsx + 顶部栏 + 底部状态栏）",
+    "description": "实现整体三栏 CSS 布局框架，包括顶部栏（Project 筛选器）、左中右三栏、底部状态栏。",
+    "steps": [
+      "在 App.tsx 中创建顶层布局：顶部栏（56px）+ 主内容区（flex row）+ 底部状态栏（32px）。",
+      "主内容区：左栏（AgentPanel，240px 固定宽度，可折叠）+ 中栏（KanbanBoard，flex: 1）+ 右栏（DetailPanel，420px 固定宽度，可折叠）。",
+      "顶部栏：左侧显示 'Agent Swarm' 标题，右侧显示 Project 筛选下拉框（从 projects 列表获取数据，选择后更新 activeProjectId）。",
+      "底部状态栏：显示 'N Agents | N Running | Server ●（绿/红）'，WebSocket 断连时 Server 指示灯变红并显示 '连接中断' 文字。",
+      "左栏和右栏各有折叠/展开按钮（点击时 width 动态切换，内容隐藏）。",
+      "验证方式：浏览器打开后可看到三栏布局，Project 筛选下拉框有选项，底部状态栏显示正确的统计数字。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 40,
+    "title": "前端：AgentCard 组件（web/src/components/AgentCard.tsx）",
+    "description": "实现单个 Agent 卡片组件，显示头像、名称、状态（含状态色条和动画）、未完成 Task 数、最近事件摘要。",
+    "steps": [
+      "创建 AgentCard.tsx，接收 agent: Agent 和 isSelected: boolean props。",
+      "卡片左边缘 4px 状态色条：idle=#9CA3AF、working=#3B82F6、stuck=#F59E0B、offline=#6B7280。",
+      "状态动画：idle 呼吸灯动画（opacity 0.5↔1 缓慢循环）；working 蓝色脉冲动画；stuck 橙色闪烁动画；offline 无动画。",
+      "显示：agent.avatar（大号 emoji）、agent.name、状态文字标签（🟢 Idle / 🔵 Working / 🟡 Stuck / ⚫ Offline）。",
+      "显示 agent.taskCount（'N 个任务待处理'）；若 taskCount=0 则显示 '无待处理任务'。",
+      "显示最近事件摘要：取 agent.lastEventAt 时间和最近事件描述（从全局事件状态获取该 Agent 最近一条事件）。",
+      "点击卡片触发 onSelect 回调，更新 selectedAgentId，右侧详情面板切换到 Agent 详情。",
+      "isSelected 时卡片有高亮背景色。",
+      "验证方式：Agent 状态为 working 时卡片左边缘为蓝色且有脉冲动画；stuck 时为橙色闪烁；点击卡片后右侧面板显示该 Agent 详情。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 41,
+    "title": "前端：AgentPanel 组件（web/src/components/AgentPanel.tsx）",
+    "description": "实现左栏 Agent 列表面板，渲染所有 Agent 的 AgentCard，提供创建 Agent 入口，并处理空状态。",
+    "steps": [
+      "创建 AgentPanel.tsx，从全局状态获取 agents Map，转为数组渲染 AgentCard 列表。",
+      "Agent 列表按状态排序：stuck 优先 > working > idle > offline。",
+      "当 agents 为空时显示空状态：🤖 图标 + '还没有 Agent' + '创建你的第一个 AI 数字员工来开始工作' + '创建 Agent' 按钮。",
+      "右上角提供 '+ Agent' 按钮，点击打开 Agent 创建表单弹窗（Modal）。",
+      "列表超出高度时可滚动（overflow-y: auto）。",
+      "验证方式：有 Agent 时列表正确渲染；无 Agent 时显示空状态；点击 '创建 Agent' 弹出创建表单。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 42,
+    "title": "前端：TaskCard 组件（web/src/components/TaskCard.tsx）",
+    "description": "实现单个任务卡片组件，根据 Task 状态显示不同的操作按钮，支持点击展开详情。",
+    "steps": [
+      "创建 TaskCard.tsx，接收 task: Task 和 onSelect 回调 props。",
+      "显示：任务标题（超出 2 行截断 ellipsis）、Agent 头像 + 名称、状态标签（颜色编码：Todo 灰/Running 蓝/Done 绿/Stuck 橙+闪烁/Cancelled 红）、创建时间（相对时间，如 '10 分钟前'）。",
+      "卡片最大高度 180px，内容超出以 '...' 截断。",
+      "操作按钮矩阵：Todo 显示 ▶启动/✏编辑/🗑删除；Running 显示 ⏹停止/✅标记完成；Stuck 显示 ⏹停止（详情面板内提供批准/拒绝+发消息）；Done/Cancelled 显示 🔄重试/🗑删除。",
+      "按钮点击时进入 loading 状态（spinner + 禁用），防止重复提交。",
+      "操作失败时显示顶部 Toast（调用通知系统）。",
+      "点击卡片主体（非按钮区域）触发 onSelect，右侧面板切换到该 Task 详情。",
+      "验证方式：Task 状态为 Running 时只显示停止和标记完成按钮；点击 ▶启动 后按钮进入 loading，Task 状态变为 Running 后按钮更新。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 43,
+    "title": "前端：KanbanBoard 组件（web/src/components/KanbanBoard.tsx）",
+    "description": "实现中栏看板面板，四列布局（Todo/Running/Stuck/Done），按 projectId 过滤任务，处理空状态。",
+    "steps": [
+      "创建 KanbanBoard.tsx，从全局状态获取 tasks，按 activeProjectId 过滤（空时显示所有）。",
+      "将 tasks 按 status 分为 Todo、Running、Stuck、Done（Cancelled Task 合并到 Done 列展示，或单独一列——按需求定：Done + Cancelled 分开展示）。",
+      "渲染四列，每列标题显示列名和任务数（如 'Todo (3)'）。",
+      "每列中的 TaskCard 列表按 priority 降序、createdAt 降序排序。",
+      "各列超出高度时可独立滚动（overflow-y: auto）。",
+      "空状态：Todo 列无任务时显示 📋 + '没有待处理的任务' + '创建任务' 按钮；Done 列无任务时显示 ✅ + '还没有已完成的任务'；Project 筛选后无结果时显示 '当前 Project 下没有任务'。",
+      "右上角提供 '+ Task' 按钮，点击打开 Task 创建表单弹窗。",
+      "验证方式：创建多个不同状态的 Task，各列正确分类显示；切换 Project 筛选器后看板只显示该 Project 的 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 44,
+    "title": "前端：ActivityTimeline 组件（web/src/components/ActivityTimeline.tsx）",
+    "description": "实现垂直时间线组件，显示 Task 或 Agent 的事件历史，每个事件节点含时间戳、工具图标、工具名称、输入摘要。",
+    "steps": [
+      "创建 ActivityTimeline.tsx，接收 events: Event[] props。",
+      "每个事件节点显示：时间戳（相对时间）、事件类型图标（📁 文件操作/⌨️ Shell/🔍 搜索/✏️ 写入/🤖 AI 消息等）、工具名称（如 'Bash'）、输入/输出摘要（截断显示）。",
+      "最新事件在底部，列表自动滚动到底部（新事件到达时）。",
+      "当前正在执行的事件（无 duration）高亮显示（蓝色左边条 + loading 动画）。",
+      "SDKResult 类型事件显示绿色完成图标，SDKAssistant 工具调用显示对应工具图标。",
+      "工具调用显示 duration（如 '1.2s'）。",
+      "events 为空时显示 '暂无事件' 提示。",
+      "验证方式：启动 Task 后详情面板的时间线实时追加新事件；最新事件为高亮状态；Task 完成后最后一条事件显示绿色完成标识。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 45,
+    "title": "前端：BudgetBar 组件（web/src/components/BudgetBar.tsx）",
+    "description": "实现预算消耗进度条组件，实时显示已用/上限金额，颜色随使用率变化。",
+    "steps": [
+      "创建 BudgetBar.tsx，接收 budgetUsed: number、maxBudgetUsd: number、turnCount: number、maxTurns: number props。",
+      "渲染两条进度条：预算消耗（budgetUsed / maxBudgetUsd）和轮次使用（turnCount / maxTurns）。",
+      "预算进度条颜色：< 70% 绿色，70-90% 橙色，> 90% 红色。",
+      "显示具体数字：'$1.23 / $5.00' 和 '45 / 200 轮次'。",
+      "进度条超过 100% 时截断显示（不超出容器）。",
+      "验证方式：budgetUsed=3.5、maxBudgetUsd=5.0 时进度条为橙色 70%；budgetUsed=4.8 时为红色 96%。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 46,
+    "title": "前端：ToolApproval 组件（web/src/components/ToolApproval.tsx）",
+    "description": "实现工具调用审批面板，当 Task 处于 Stuck 状态（canUseTool 拦截）时显示，提供批准/拒绝按钮和自定义消息输入框。",
+    "steps": [
+      "创建 ToolApproval.tsx，接收 taskId、toolName、toolInput、stuckReason props，显示被拦截的工具调用详情。",
+      "以等宽字体展示 toolInput（JSON 格式，最多显示 500 字符，超出可展开）。",
+      "提供 '✅ 允许' 和 '❌ 拒绝' 两个按钮，点击时调用 api.approveTool(taskId, { toolName, toolInput, decision })。",
+      "提供自定义消息输入框（textarea），提交时调用 api.sendMessage(taskId, { message, allowTool: { toolName, decision: 'allow' } })。",
+      "按钮点击时进入 loading 状态，操作完成后组件消失（Task 状态变为 Running）。",
+      "验证方式：Task 处于 Stuck 状态时 ToolApproval 组件显示；点击 '允许' 后 Task 状态变为 Running，组件消失。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 47,
+    "title": "前端：DetailPanel — 面板框架与 Task 基本信息视图",
+    "description": "创建 DetailPanel 组件框架（根据选中项切换 Task/Agent 视图），实现 Task 基本信息展示：标题、描述、指派 Agent、状态标签、时间信息、活动时间线、预算进度条。",
+    "steps": [
+      "创建 web/src/components/DetailPanel.tsx，根据 selectedTaskId / selectedAgentId 决定渲染 Task 详情或 Agent 详情，均无选中时显示空状态（👆 + '点击任务卡片或 Agent 卡片查看详情'）。",
+      "Task 详情视图上半部分：显示 task.title（大号标题，h2）、task.description（Markdown 渲染为 HTML）、指派 Agent（头像 + 名称 + 角色标签）、状态标签（颜色编码）、创建/启动/完成时间（相对时间格式）。",
+      "集成 ActivityTimeline 组件：展示该 Task 的 events，分页加载（初始 50 条，滚动到顶部时调用 getTaskEvents 加载上一页），新事件通过 WebSocket 实时追加到底部。",
+      "集成 BudgetBar 组件，显示预算和轮次消耗。",
+      "面板切换时：右上角显示局部 spinner，内容区保持上一次内容直到新数据加载完成。",
+      "验证方式：点击 Task 卡片后右侧面板显示完整 Task 基本信息；WebSocket 推送新事件时时间线实时追加。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 48,
+    "title": "前端：DetailPanel — Agent 详情视图",
+    "description": "实现详情面板的 Agent 详情视图：完整 Agent 信息（含 prompt 可编辑）、当前 Task 状态、历史 Task 列表、最近 50 条事件时间线。",
+    "steps": [
+      "Agent 详情视图：显示 agent.avatar（大号）、agent.name、agent.role、agent.prompt（可展开/折叠显示）、资源配置（maxTurns、maxBudgetUsd、allowedTools）。",
+      "提供 '编辑 Agent' 按钮，点击打开 Agent 编辑表单弹窗（复用 Agent 创建表单）。",
+      "显示当前 Task 状态：若 agent.currentTaskId 存在，显示当前执行的 Task 标题和状态。",
+      "从 API 加载 agent.stats：totalTasksCompleted、totalTasksCancelled、totalCostUsd、avgDurationMs 统计数据。",
+      "显示最近 10 条历史 Task 列表（从 GET /api/agents/:id/stats 的 recentTasks 获取），点击可切换到 Task 详情。",
+      "集成 ActivityTimeline，显示该 Agent 最近 50 条事件（从关联 Task 的事件中筛选）。",
+      "验证方式：点击 Agent 卡片后面板显示 Agent 完整信息；stats 显示正确的统计数字；历史 Task 列表可点击跳转。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 49,
+    "title": "前端：Agent 创建/编辑表单弹窗",
+    "description": "实现 Agent 创建和编辑的 Modal 表单，包含所有必填/选填字段、Emoji 选择器、表单验证和提交。",
+    "steps": [
+      "创建 web/src/components/modals/AgentFormModal.tsx，接收 agent?（有则为编辑，无则为创建）、onClose 回调。",
+      "表单字段：名称（input，1-50字符）、头像（Emoji 选择器，展示 20 个预设 emoji 可点击选择，或手动输入）、角色描述（input，1-200字符）、提示词（textarea，10-5000字符）、默认 Project（下拉选择）、最大轮次（number input，1-500，默认200）、预算上限（number input，0.1-50.0，默认5.0）、允许工具（多选 checkbox）。",
+      "表单实时验证：字段不满足规则时字段下方红色错误提示，提交按钮禁用直到验证通过。",
+      "提交时调用 api.createAgent() 或 api.updateAgent()，成功后关闭弹窗，全局状态更新。",
+      "提交按钮有 loading 状态，操作失败时显示 Toast 错误通知。",
+      "验证方式：提示词少于 10 字符时提交按钮灰化，错误提示显示；填写完整后提交成功，AgentPanel 列表中出现新 Agent。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 50,
+    "title": "前端：Task 创建/编辑表单弹窗",
+    "description": "实现 Task 创建和编辑的 Modal 表单，包含所有字段、Project 新建选项、表单验证和提交。",
+    "steps": [
+      "创建 web/src/components/modals/TaskFormModal.tsx，接收 task?（编辑时传入）、onClose 回调。",
+      "表单字段：标题（input，1-100字符）、描述（textarea，10-10000字符，支持 Markdown 预览）、所属 Project（下拉选择+新建选项，选 '新建 Project' 时展开 Project 名称和路径输入框）、指派 Agent（下拉选择，显示 Agent 当前状态标识，Working 状态 Agent 可选但有警告）、优先级（单选按钮 低/中/高，默认中）、标签（输入框，回车添加，最多 10 个）、最大轮次（可选，占位提示 '继承 Agent 配置'）、预算上限（可选）。",
+      "表单验证规则同 §8.5。",
+      "编辑模式：agentId 字段仅在 Task 为 Todo 状态时可修改。",
+      "提交时调用 api.createTask() 或 api.updateTask()，成功后更新看板。",
+      "验证方式：描述少于 10 字符时提交按钮灰化；选择新建 Project 后展开额外字段；提交成功后看板 Todo 列出现新 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 51,
+    "title": "前端：通知系统（web/src/components/NotificationToast.tsx）",
+    "description": "实现右上角 Toast 通知队列，最多同时显示 3 条，Stuck 通知不自动消失，其他通知按时间自动消失。",
+    "steps": [
+      "创建 NotificationToast.tsx，从全局 notifications 状态渲染通知列表，固定在右上角（position: fixed, top/right）。",
+      "通知类型及样式：Stuck 警告（橙色，带 '查看' 按钮，不消失）；任务完成（绿色，5s 自动消失）；操作成功（绿色，3s 消失）；操作失败（红色，5s 消失或手动关闭）；连接恢复（蓝色，3s 消失）。",
+      "通知队列最多 3 条：超出时新通知替换最旧的非 Stuck 通知；Stuck 通知始终保留直到用户点击关闭或 '查看'。",
+      "每条通知有关闭按钮（×），点击 dispatch DISMISS_NOTIFICATION。",
+      "Stuck 通知点击 '查看' 按钮时，更新 selectedTaskId，详情面板切换到对应 Task。",
+      "验证方式：Task 变为 Stuck 时右上角出现橙色通知，超出 30s 不消失；创建 Agent 成功后绿色通知 3s 后自动消失。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 52,
+    "title": "前端：加载骨架屏与按钮 Loading 状态",
+    "description": "实现首屏加载骨架屏、局部 spinner、按钮 loading 状态，提升用户感知体验。",
+    "steps": [
+      "创建 Skeleton 组件：灰色矩形，CSS 动画（shimmer 效果），用于占位 Agent 卡片和 Task 卡片。",
+      "首屏加载时三栏均显示骨架屏（每栏 3-4 个灰色矩形），超过 3 秒后叠加显示 '加载中...' 文字。",
+      "看板刷新时（手动刷新或 WebSocket 断连后重连）显示局部 spinner（列顶部），不阻塞卡片操作。",
+      "详情面板切换时：面板右上角显示小 spinner，内容区保持上一次内容直到新数据加载完成。",
+      "所有操作按钮（启动/停止/批准/提交表单等）点击后变为 spinning icon + 禁用状态，操作完成（成功或失败）后恢复。",
+      "验证方式：模拟网络慢加载，首屏显示骨架屏；点击 '启动' 按钮后按钮变 loading，状态变更后恢复。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 53,
+    "title": "前端：错误状态处理（API 失败 Toast + WebSocket 断连状态栏）",
+    "description": "统一处理前端所有错误状态展示，确保用户在操作失败和连接中断时有明确的视觉反馈。",
+    "steps": [
+      "API 调用失败时自动触发红色 Toast 通知（显示 error.message，5s 消失），在 api/client.ts 的基础 request 函数中统一拦截错误并 dispatch 到通知系统。",
+      "WebSocket 断连时底部状态栏 Server 指示灯变红，显示 '🔴 连接中断'；重连成功后变绿，显示蓝色通知 '连接已恢复'（3s 消失）。",
+      "表单验证错误在字段下方红色内联提示，提交按钮保持禁用。",
+      "SDK 错误导致 Task 变为 Stuck 时，Task 卡片显示红色警告 + stuckReason 摘要；详情面板显示完整 stuckReason。",
+      "验证方式：关闭后端 Server，前端底部状态栏变为红色 '连接中断'；重新启动 Server 后显示 '连接已恢复' 通知。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 54,
+    "title": "前端：Project 管理弹窗（创建/编辑）",
+    "description": "实现 Project 创建和编辑的 Modal 表单，含名称和路径校验。",
+    "steps": [
+      "创建 web/src/components/modals/ProjectFormModal.tsx。",
+      "表单字段：项目名称（input，只允许 [a-zA-Z0-9_-]，实时校验）、绝对路径（input，前端提示需要绝对路径，后端进一步校验是否存在）、描述（textarea，可选）。",
+      "提交时调用 api.createProject() 或 api.updateProject()，后端返回 400 时显示 error.message（如 '路径不存在'）。",
+      "验证方式：提交含特殊字符的项目名称时返回 400 错误提示；提交有效的绝对路径成功创建后，Project 出现在顶部筛选下拉框中。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 55,
+    "title": "启动脚本：start.js（跨平台）",
+    "description": "实现跨平台的 Node.js 启动脚本，检查依赖、初始化目录、安装依赖、注册 Hooks、启动 Server 和前端，轮询健康检查后打开浏览器。",
+    "steps": [
+      "创建 start.js，检查 node --version >= 18，否则报错退出。",
+      "检查 claude --version 是否可用，不可用时报错退出（提示安装 Claude Code CLI）。",
+      "创建 data/events/ 和 data/logs/ 目录（已存在时跳过）。",
+      "在 server/ 和 web/ 目录分别运行 npm install。",
+      "运行 node scripts/register-hooks.js 注册 Hooks（失败时仅警告，不阻塞启动）。",
+      "根据 NODE_ENV 选择启动命令：开发模式用 tsx watch，生产模式用 node dist/index.js（先检查 dist/ 是否存在，不存在则先 tsc 编译）。",
+      "spawn Server 进程和前端 Vite dev server 进程，stdio: 'inherit'。",
+      "轮询 GET http://localhost:3456/api/health（最多 30 次，每次间隔 1s），成功后调用 open/xdg-open/start 打开浏览器（跨平台）。",
+      "注册 SIGINT 信号处理，Ctrl+C 时 kill Server 和前端进程。",
+      "验证方式：运行 node start.js，Server 和前端均启动，浏览器自动打开 http://localhost:5173；Ctrl+C 后两个进程均退出。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 56,
+    "title": "启动脚本：stop.js（跨平台）",
+    "description": "实现跨平台停止脚本，找到并终止正在运行的 Server 和前端进程。",
+    "steps": [
+      "创建 stop.js，跨平台查找监听 3456 端口的进程（Windows: netstat + taskkill；macOS/Linux: lsof + kill）。",
+      "查找运行 vite 开发服务器的进程并终止（匹配进程名或端口 5173）。",
+      "优雅退出失败时使用 SIGKILL（force kill）。",
+      "输出清晰的日志：'Server 进程已停止' / '前端进程已停止' / '未找到运行中的进程'。",
+      "验证方式：start.js 启动后运行 node stop.js，两个进程均终止，端口 3456 和 5173 释放。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 57,
+    "title": "后端：graceful shutdown（Server 退出时中止所有 SDK 查询）",
+    "description": "实现 Server 优雅退出逻辑，确保在 SIGTERM/SIGINT 信号时中止所有活跃的 SDK 查询并持久化状态。",
+    "steps": [
+      "在 server/index.ts 注册 SIGTERM 和 SIGINT 信号处理。",
+      "收到信号时：调用 sdkSessionManager.stopAll()，遍历 activeQueries 中所有条目，调用 abortController.abort()。",
+      "stopAll() 完成后，将所有 Running 状态的 Task 标记为 Stuck（stuckReason = 'Server 正常关闭，请重启后恢复'），持久化到磁盘。",
+      "等待 HTTP Server close 完成后 process.exit(0)。",
+      "验证方式：有 Running Task 时发送 SIGTERM，Server 退出后对应 Task 状态变为 Stuck，重启 Server 后状态仍为 Stuck。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 58,
+    "title": "后端：并发 Task 数限制与 Agent 单 Task 执行约束",
+    "description": "在 startTask API 中强制执行并发 Task 上限和 Agent 同时只执行一个 Task 的约束。",
+    "steps": [
+      "在 taskManager.startTask() 中，计算当前 status 为 Running 或 Stuck 的 Task 数量，若 >= MAX_CONCURRENT_TASKS，返回 409 RESOURCE_HAS_DEPENDENTS，提示 '已达到并发上限（N/10）'。",
+      "检查 agentId 对应的 Agent 是否已有 status 为 Running 或 Stuck 的 Task，若有则返回 409 AGENT_BUSY，消息携带 '当前执行的任务 <taskTitle>'。",
+      "前端：若指派 Agent 处于 working/stuck 状态，TaskCard 的 '启动' 按钮置灰，hover tooltip 提示 'Agent 当前正在执行任务 <taskTitle>'。",
+      "验证方式：同一 Agent 有 Running Task 时再启动另一个 Task 返回 409 AGENT_BUSY；10 个 Task 并行运行后启动第 11 个返回 409 并发超限。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 59,
+    "title": "后端：预算/轮次超限自动停止 Task",
+    "description": "在 consumeStream 中处理 SDK 因预算超限（maxBudgetUsd）或轮次超限（maxTurns）而终止的场景，自动将 Task 标记为 Done。",
+    "steps": [
+      "根据 SDK 验证结果（任务2中确认的行为），在 messageParser 中识别 SDKResultMessage 是否含 'max_budget' 或 'max_turns' 终止原因。",
+      "若 SDKResultMessage 表明因 maxBudgetUsd 超限停止，调用 taskManager.completeTask(taskId, 'max_budget')。",
+      "若因 maxTurns 超限停止，调用 taskManager.completeTask(taskId, 'max_turns')。",
+      "Task.completedReason 记录对应值，前端 Task 详情页显示停止原因说明。",
+      "广播 task:update，前端 Task 卡片移至 Done 列，详情面板显示 '已达到预算/轮次上限，任务自动停止'。",
+      "验证方式：设置 maxBudgetUsd=0.001 的 Task 启动后，SDK 超限，Task 自动变为 Done，completedReason='max_budget'。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 60,
+    "title": "后端：JSONL 事件归档（超过 100MB 压缩为 .jsonl.gz）",
+    "description": "在 EventProcessor 中实现 JSONL 文件大小检查，超过 100MB 时异步压缩归档。",
+    "steps": [
+      "在 eventProcessor.ts 中，每追加 100 条事件后（或每隔 5 分钟定时）检查 <taskId>.jsonl 文件大小。",
+      "若文件超过 100MB，启动异步归档：使用 zlib.createGzip() 压缩文件，输出到 <taskId>.jsonl.gz，保留原文件（先归档再清空原文件，防止并发写入）。",
+      "GET /api/tasks/:id/events 接口中，读取时优先读已归档的 .jsonl.gz 文件（使用 zlib.createGunzip() 解压流），再读取当前 .jsonl 文件，合并排序。",
+      "验证方式：手动填充 >100MB 的 JSONL 文件，触发归档后 .jsonl.gz 文件存在，GET events 仍可正确返回归档中的事件。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 61,
+    "title": "单元测试：taskManager 状态机",
+    "description": "为 TaskManager 的各状态迁移方法编写 Vitest 单元测试，覆盖合法迁移、非法迁移、并发约束等场景。",
+    "steps": [
+      "创建 server/tests/taskManager.test.ts，使用 Vitest。",
+      "测试 startTask：Todo → Running（Agent idle → working）正常迁移；Running → Running 返回 409；Agent busy 返回 409 AGENT_BUSY。",
+      "测试 stuckTask：Running → Stuck（Agent working → stuck）正常；非 Running 状态调用返回错误。",
+      "测试 resumeTask：Stuck → Running（Agent stuck → working）正常。",
+      "测试 cancelTask：Running/Stuck → Cancelled；Todo → Cancelled（含 Agent taskCount 更新）。",
+      "测试 completeTask：Running → Done（含 agent.stats 更新：totalTasksCompleted、totalCostUsd、avgDurationMs）。",
+      "Mock sdkSessionManager、agentStore、taskStore 的方法。",
+      "验证方式：vitest run 全部测试通过，taskManager 核心函数覆盖率 > 80%。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 62,
+    "title": "单元测试：isAutoAllowed 与 isPermissionPrompt",
+    "description": "为 Stuck 检测的核心逻辑函数编写单元测试，覆盖边界情况。",
+    "steps": [
+      "创建 server/tests/stuckDetector.test.ts。",
+      "测试 isAutoAllowed：Read/Glob/Grep 工具返回 true；Bash 工具不含危险关键词返回 true；Bash 工具含 'rm -rf' 返回 false；Write 工具返回 false（需人工审批）；WebFetch 工具返回 false。",
+      "测试 isPermissionPrompt：toolOutput 含 'Claude wants to' 返回 true；含 'permission' 返回 true；不含任何关键词返回 false；大小写混合测试。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 63,
+    "title": "单元测试：safeWrite 与文件锁",
+    "description": "测试 safeWrite 函数在并发写入、模拟崩溃（写临时文件后 rename 前）等场景下的正确性。",
+    "steps": [
+      "创建 server/tests/fileStore.test.ts。",
+      "测试正常写入：safeWrite 后文件内容与传入数据一致，无临时文件残留。",
+      "测试并发写入：10 个并发的 safeWrite 调用，最终文件数据为其中一个（no corruption），无 EBUSY 崩溃。",
+      "测试 schema 迁移：读取 v1 数据文件，migrate() 后 _schema_version 更新到最新值，数据字段正确迁移。",
+      "验证方式：vitest run 测试通过，无竞态条件导致的数据损坏。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 64,
+    "title": "集成测试：REST API 全端点（Supertest + Mock SDK）",
+    "description": "用 Supertest 对全部 REST API 端点进行集成测试，Mock Claude Agent SDK 的 query() 调用，覆盖正常路径和错误路径。",
+    "steps": [
+      "创建 server/tests/api.test.ts，使用 Supertest + Vitest。",
+      "Mock @anthropic-ai/claude-agent-sdk 的 query()，让它立即返回一条 SDKInit 消息和一条 SDKResult 消息。",
+      "测试 Agent CRUD：创建/查询/更新/删除 Agent 的完整流程，验证响应格式、状态码、持久化。",
+      "测试 Project CRUD：同上。",
+      "测试 Task CRUD：创建/查询/更新/删除，验证 agentId 不存在时返回 404，Running Task 删除返回 409。",
+      "测试 Task 生命周期：start → (mock SDK 完成) → Task 自动变 Done；stop → Cancelled；done → Done。",
+      "测试 approve-tool 与 message 接口：Stuck Task 调用后变为 Running。",
+      "测试 WebSocket 消息推送：启动 Task 时验证 WebSocket 客户端收到 task:update 和 agent:update 消息。",
+      "目标：API 端点覆盖率 > 70%。",
+      "验证方式：vitest run 全部集成测试通过，无未处理异常。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 65,
+    "title": "端到端验证：完整流程（创建 Agent → 创建 Task → 启动 → 监控 → 完成）",
+    "description": "在真实环境下（含真实 Claude Code SDK）运行完整业务流程端到端验证，确保各模块协同正常工作。",
+    "steps": [
+      "启动 Server，通过前端 UI（或 curl）创建一个测试 Agent（名称：'测试员'，prompt：'你是一个测试助手，执行简单命令后立即退出'）。",
+      "创建一个测试 Project（路径：当前项目根目录）。",
+      "创建一个测试 Task（title：'E2E 测试任务'，description：'输出当前目录下的文件列表后退出'，指派测试员 Agent）。",
+      "点击 '启动' 按钮，验证：Task 状态变为 Running，Agent 状态变为 working，activeQueries 有记录，sessionId 绑定。",
+      "等待 Task 完成：SDK 返回 SDKResult，Task 状态变为 Done，Agent 变为 idle，看板 Done 列显示该 Task。",
+      "验证详情面板：事件时间线有 SDKInit + SDKAssistant + SDKResult 事件，预算进度条有值，输出预览显示文件列表。",
+      "Server 重启后状态恢复：Task 仍为 Done，Agent 仍为 idle，数据持久化正确。",
+      "验证方式：完整流程无报错，所有状态变化符合预期，前端实时更新，Server 重启后数据一致。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 66,
+    "title": "端到端验证：多 Task 并行执行",
+    "description": "验证多个 Task 使用不同 Agent 并行运行的场景，确保并发 SDK 查询、事件隔离、状态广播均正常。",
+    "steps": [
+      "创建 3 个不同的 Agent（Agent-A、Agent-B、Agent-C）。",
+      "为每个 Agent 创建一个 Task，描述均为简单操作（输出目录/日期等）。",
+      "同时启动 3 个 Task，验证：3 个 Task 均变为 Running，3 个 Agent 均为 working，sdkSessionManager.activeQueries 有 3 个条目，每个 Task 的 sessionId 互不相同。",
+      "等待 3 个 Task 相继完成，验证：各 Task 的事件互不干扰（taskId 正确），3 个 Agent 均变为 idle，看板 Done 列有 3 张 Task 卡片。",
+      "验证方式：并行运行期间前端无 UI 冻结，事件时间线中各 Task 的事件不串行，3 个 Task 均正确完成。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 67,
+    "title": "端到端验证：人工介入流程（Stuck → 批准 → 恢复）",
+    "description": "验证完整的人工介入流程：Task 被 canUseTool 拦截 → Stuck → 前端审批 → 恢复 Running。",
+    "steps": [
+      "创建一个 Agent，其 prompt 引导 SDK 执行会被 canUseTool 拦截的操作（例如执行 Write 操作写入文件）。",
+      "启动对应 Task，等待 canUseTool 拦截。",
+      "验证：Task 状态变为 Stuck，Agent 变为 stuck，前端右上角出现橙色 Stuck 警告通知，详情面板显示 ToolApproval 组件，工具调用详情正确显示。",
+      "点击 '允许' 按钮，验证：Task 变为 Running，Agent 变为 working，ToolApproval 组件消失，事件时间线有 PostToolUse 事件。",
+      "等待 Task 自然完成。",
+      "验证方式：Stuck → Running → Done 完整流程无报错，各状态变化实时反映在前端 UI。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 68,
+    "title": "文档：README.md",
+    "description": "编写项目 README，包含项目介绍、系统要求、安装步骤、使用指南、API 概览、架构说明。",
+    "steps": [
+      "创建 README.md，包含：项目简介（Agent Swarm 是什么）、系统要求（Node.js >= 18、Claude Code CLI）、快速开始（git clone → npm install → node start.js）。",
+      "描述创建 Agent 和 Task 的基本操作步骤。",
+      "列出核心 API 端点（简要）。",
+      "描述 .env 环境变量配置项（PORT、MAX_CONCURRENT_TASKS 等）。",
+      "添加架构图说明（引用 requirement.md 中的 mermaid 图或截图）。",
+      "说明生产模式构建命令（tsc + npm run build）。",
+      "验证方式：README.md 文档完整，按照 README 步骤可成功启动项目。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 69,
+    "title": "后端：SDKSessionManager — consumeStream 消息流消费与处理",
+    "description": "实现 SDKSessionManager 的 consumeStream 后台协程：异步迭代 SDK 消息流，解析每条消息为 Event，处理 session 绑定和任务完成，处理流异常。",
+    "steps": [
+      "实现 consumeStream(taskId, stream)：使用 for await 迭代 SDK AsyncGenerator 消息流。",
+      "每条消息调用 messageParser.parseMessage(taskId, sessionId, message)，返回的 Event 交给 eventProcessor.processEvent()。",
+      "特殊消息处理：收到 SDKInit 消息时调用 bindSession(taskId, message.session_id)。",
+      "收到 SDKResult 消息时调用 taskManager.completeTask(taskId, reason, output)，传入 result 中的完成原因和输出摘要。",
+      "消息流正常结束（for await 退出）时：从 activeQueries 中移除该 taskId 条目。",
+      "实现 handleStreamError(taskId, error)：若是 AbortError（用户主动取消）则静默忽略；若是其他错误，调用 taskManager.stuckTask(taskId, error.message) 将 Task 标记为 Stuck。",
+      "在 startTask 中启动 consumeStream 时使用 .catch() 确保未处理的 Promise rejection 不会导致进程崩溃。",
+      "验证方式：consumeStream 收到 SDKResult 后 Task 状态自动变为 Done；模拟 stream 抛出非 AbortError 时 Task 变为 Stuck。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 70,
+    "title": "后端：SDKSessionManager — sendMessage (resume) 与 stopTask",
+    "description": "实现 SDKSessionManager 的用户消息发送（通过 SDK resume 恢复会话）和任务停止（通过 AbortController 中止流）方法。",
+    "steps": [
+      "实现 sendMessage(taskId, sessionId, message)：通过 SDK resume 机制创建新的查询流 query({ prompt: message, options: { resume: sessionId, abortSignal: new AbortController().signal } })。",
+      "新流注册到 activeQueries（替换旧条目），重新启动 consumeStream(taskId, newStream) 消费新消息流。",
+      "resume 前校验 sessionId 对应的 Task 确实存在且状态为 Stuck，否则抛出错误。",
+      "实现 stopTask(taskId)：从 activeQueries 中获取条目，调用 abortController.abort() 触发流中止，从 activeQueries 中删除条目。",
+      "stopTask 为幂等操作：若 taskId 不在 activeQueries 中，静默返回（不报错）。",
+      "实现 stopAll()：遍历 activeQueries 中所有条目，逐一调用 abort()，清空 activeQueries 和 sessionReverseMap，用于 Server 优雅退出。",
+      "验证方式：调用 sendMessage 后新 stream 消费正常，事件继续产生；调用 stopTask 后 activeQueries 中该条目被移除，流不再产生消息。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 71,
+    "title": "后端：TaskManager — Stuck/Resume 状态迁移与通知",
+    "description": "实现 TaskManager 的 Stuck 标记和 Resume 恢复逻辑，包括 Stuck 原因记录、前端通知推送、Agent 状态联动。",
+    "steps": [
+      "实现 stuckTask(taskId, stuckReason)：校验 Task 当前状态为 Running，Task → Stuck，更新 stuckReason 字段，对应 Agent 状态 → stuck，广播 WebSocket task:update + agent:update。",
+      "广播 notification 类型 WebSocket 消息：{ type: 'notification', data: { level: 'warning', taskId, message: stuckReason } }，前端据此弹出橙色 Stuck 警告通知。",
+      "实现 resumeTask(taskId)：校验 Task 当前状态为 Stuck，Task Stuck → Running，清除 stuckReason（设为 undefined），对应 Agent stuck → working，广播 task:update + agent:update。",
+      "resumeTask 不直接调用 sdkSessionManager.sendMessage()——由 API 路由层负责调用 resume 的 SDK 操作后再调用 resumeTask。",
+      "状态迁移前校验合法性：stuckTask 对非 Running 的 Task 抛出错误，resumeTask 对非 Stuck 的 Task 抛出错误。",
+      "验证方式：Running Task 调用 stuckTask 后状态变为 Stuck，stuckReason 有值，Agent 变为 stuck；Stuck Task 调用 resumeTask 后状态变为 Running，Agent 变为 working。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 72,
+    "title": "前端：REST API 客户端 — Task CRUD API",
+    "description": "在 API 客户端中封装 Task 的增删改查接口函数，包含查询参数构建和分页处理。",
+    "steps": [
+      "在 web/src/api/client.ts 中新增 Task CRUD 函数。",
+      "实现 getTasks(params: GetTasksParams)：构建查询字符串（projectId、status 逗号分隔、agentId、q、page、limit、sort、order），发起 GET /api/tasks，返回 { tasks, total, page, limit, totalPages }。",
+      "定义 GetTasksParams 接口：{ projectId?: string, status?: string[], agentId?: string, q?: string, page?: number, limit?: number, sort?: string, order?: string }。",
+      "实现 getTask(id) → Task：GET /api/tasks/:id。",
+      "实现 createTask(data: CreateTaskData) → Task：POST /api/tasks。",
+      "实现 updateTask(id, data: Partial<CreateTaskData>) → Task：PUT /api/tasks/:id。",
+      "实现 deleteTask(id) → void：DELETE /api/tasks/:id。",
+      "验证方式：调用 createTask 后调用 getTasks，返回结果包含新创建的 Task；调用 getTasks({ status: ['Todo'] }) 只返回 Todo 状态的 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 73,
+    "title": "前端：REST API 客户端 — Task 操作 API（start/stop/done/message/approve/retry/events/sdk-status）",
+    "description": "在 API 客户端中封装 Task 的所有操作类接口：启动、停止、完成、消息发送、工具审批、重试、事件查询、SDK 状态查询。",
+    "steps": [
+      "在 web/src/api/client.ts 中新增 Task 操作函数。",
+      "实现 startTask(id) → Task：POST /api/tasks/:id/start。",
+      "实现 stopTask(id) → Task：POST /api/tasks/:id/stop。",
+      "实现 doneTask(id) → Task：POST /api/tasks/:id/done。",
+      "实现 retryTask(id) → Task：POST /api/tasks/:id/retry，返回新建的重试 Task。",
+      "实现 sendMessage(id, data: { message: string, allowTool?: { toolName: string, decision: 'allow' | 'deny' } }) → void：POST /api/tasks/:id/message。",
+      "实现 approveTool(id, data: { toolName: string, toolInput: string, decision: 'allow' | 'deny' }) → void：POST /api/tasks/:id/approve-tool。",
+      "实现 getTaskEvents(id, params?: { page?: number, limit?: number, type?: string }) → { events: Event[], total: number }：GET /api/tasks/:id/events。",
+      "实现 getSdkStatus(id) → { running: boolean, turnCount: number, budgetUsed: number, maxBudgetUsd: number }：GET /api/tasks/:id/sdk-status。",
+      "验证方式：调用 startTask(id) 后 Task 状态变为 Running；调用 approveTool 后 Stuck Task 恢复为 Running；getTaskEvents 返回事件列表。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 74,
+    "title": "前端：DetailPanel — Task 工具调用日志、输出预览与人工介入",
+    "description": "实现 DetailPanel 中 Task 详情视图的下半部分：工具调用日志表格、Agent 输出预览区域、以及 Stuck 状态时的人工介入面板。",
+    "steps": [
+      "工具调用日志表格：从 events 中过滤出含 toolName 的事件，按时间倒序渲染表格（列：时间 | 工具图标+名称 | 输入摘要截断100字符 | 耗时）。",
+      "表格行点击可展开查看完整 toolInput（JSON 格式化显示），再次点击收起。",
+      "Agent 输出预览区域：从 events 中取最近的 SDKResult 或 SDKAssistant 文本消息，以等宽字体展示最近 500 字符，底部提供 '查看完整输出' 按钮（展开为滚动区域）。",
+      "Task 为 Stuck 状态时，在输出预览下方显示 ToolApproval 组件：被拦截的工具调用详情（等宽字体 toolInput，最多 500 字符，可展开）、'允许'/'拒绝' 按钮、自定义消息输入框。",
+      "所有操作按钮（允许/拒绝/发送消息）点击后进入 loading 状态，操作成功后 ToolApproval 组件自动隐藏。",
+      "验证方式：Task 详情面板正确显示工具日志表格和输出预览；Stuck 时显示 ToolApproval 组件，点击 '允许' 后组件消失。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 75,
+    "title": "后端：TypeScript 共享类型定义（前后端共用接口）",
+    "description": "创建共享的 TypeScript 类型定义文件，定义所有数据模型接口（Agent、Task、Event、Project、Session、WebSocket 消息等），供前后端共同引用。",
+    "steps": [
+      "创建 shared/types.ts，定义 Agent 接口：id, name, avatar, role, prompt, isEnabled, status(AgentStatus), projectId?, currentTaskId?, maxTurns?, maxBudgetUsd?, allowedTools?, taskCount, stats(AgentStats), lastEventAt, createdAt, updatedAt。",
+      "定义 Task 接口：id, title, description, status(TaskStatus), agentId, projectId, sessionId?, parentTaskId?, output?, completedReason?, priority, tags, eventCount, turnCount, budgetUsed, maxTurns, maxBudgetUsd, deletedAt?, createdAt, startedAt?, completedAt?, stuckReason?。",
+      "定义 Event、Session、Project 接口，以及所有枚举/联合类型（AgentStatus, TaskStatus, EventType, CompletedReason）。",
+      "定义 WebSocket 消息类型：WSMessage（type + data 联合类型），包含 task:update, agent:update, event:new, tool:approval, task:budget, notification, error。",
+      "定义 API 请求/响应类型：CreateAgentRequest, UpdateAgentRequest, CreateTaskRequest, UpdateTaskRequest, GetTasksParams, PaginatedResponse<T>, ApiErrorResponse。",
+      "在 server/ 和 web/ 的 tsconfig.json 中配置 paths 别名指向 shared/ 目录。",
+      "验证方式：前后端分别 import { Agent, Task } from 'shared/types'，TypeScript 编译无报错。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 76,
+    "title": "前端：Emoji 选择器组件（web/src/components/EmojiPicker.tsx）",
+    "description": "实现 Agent 创建/编辑表单中使用的 Emoji 选择器组件，展示 20 个预设 emoji，支持手动输入自定义 emoji。",
+    "steps": [
+      "创建 EmojiPicker.tsx，接收 value: string 和 onChange: (emoji: string) => void props。",
+      "渲染 20 个预设 emoji 网格：🤖🔬🕷️📝✅📊🔧🎯💡🔍📦🚀🛡️⚡🎨📐🗂️🔮🧩🌐，每个 emoji 为可点击按钮。",
+      "点击预设 emoji 后调用 onChange，当前选中 emoji 有高亮边框。",
+      "底部提供文本输入框，用户可手动输入任意 emoji 字符（1-2 个字符限制），输入后自动调用 onChange。",
+      "输入框支持 emoji 键盘输入和粘贴。",
+      "未选择任何 emoji 时显示占位提示 '选择或输入 emoji'，默认值为 🤖。",
+      "验证方式：点击预设 emoji 后 value 更新；手动输入 '😎' 后 value 更新为 '😎'；打开 Agent 创建表单时 Emoji 选择器默认显示 🤖。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 77,
+    "title": "前端：标签输入组件（web/src/components/TagInput.tsx）",
+    "description": "实现 Task 创建/编辑表单中使用的标签输入组件，支持回车添加、点击删除、数量限制。",
+    "steps": [
+      "创建 TagInput.tsx，接收 tags: string[] 和 onChange: (tags: string[]) => void props。",
+      "渲染已输入的标签列表：每个标签显示为圆角胶囊样式（带 × 删除按钮），点击 × 从 tags 中移除。",
+      "底部输入框：输入文字后按 Enter 或逗号添加标签，清空输入框。",
+      "验证规则：每个标签 1-20 字符，最多 10 个标签；超出限制时输入框下方显示红色提示。",
+      "重复标签不重复添加（去重，大小写不敏感）。",
+      "输入为空时按 Enter 无反应。",
+      "验证方式：输入 'nlp' 按 Enter 后标签列表出现 'nlp'；输入第 11 个标签时显示 '最多 10 个标签' 提示；点击标签 × 后标签被移除。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 78,
+    "title": "前端：Markdown 渲染组件（web/src/components/MarkdownRenderer.tsx）",
+    "description": "实现安全的 Markdown 渲染组件，用于 Task 描述的展示和预览。",
+    "steps": [
+      "创建 MarkdownRenderer.tsx，接收 content: string props。",
+      "使用轻量 Markdown 解析库（如 marked 或 markdown-it）将 content 渲染为 HTML。",
+      "配置白名单：仅允许基础 Markdown 语法（标题、加粗、斜体、代码块、列表、链接），禁止 HTML 标签注入。",
+      "渲染的 HTML 使用 dangerouslySetInnerHTML 插入，确保通过 DOMPurify 或类似库做 XSS 过滤。",
+      "代码块使用等宽字体，带浅灰背景和圆角。",
+      "链接在新标签页打开（target='_blank'，rel='noopener noreferrer'）。",
+      "超长内容时容器可滚动（max-height 限制）。",
+      "验证方式：输入含代码块和链接的 Markdown 内容，渲染为正确格式；输入含 <script> 标签的内容被过滤掉。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 79,
+    "title": "前端：相对时间格式化工具函数（web/src/utils/timeFormat.ts）",
+    "description": "实现将时间戳转换为相对时间字符串的工具函数（如 '10分钟前'、'2小时前'、'3天前'），供 AgentCard 和 TaskCard 使用。",
+    "steps": [
+      "创建 web/src/utils/timeFormat.ts，导出 formatRelativeTime(timestamp: number): string 函数。",
+      "时间差 < 60秒：返回 '刚刚'。",
+      "时间差 < 60分钟：返回 'N分钟前'（如 '10分钟前'）。",
+      "时间差 < 24小时：返回 'N小时前'（如 '2小时前'）。",
+      "时间差 < 30天：返回 'N天前'（如 '3天前'）。",
+      "时间差 >= 30天：返回格式化日期（如 '2026-03-15'）。",
+      "timestamp 为 0 或无效值时返回空字符串 ''。",
+      "导出 formatDuration(ms: number): string 函数：将毫秒转换为 '1分30秒' 或 '2小时15分' 格式，用于显示任务执行耗时。",
+      "验证方式：formatRelativeTime(Date.now() - 5 * 60 * 1000) 返回 '5分钟前'；formatDuration(90000) 返回 '1分30秒'。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 80,
+    "title": "前端：面板折叠/展开功能",
+    "description": "实现左栏（AgentPanel）和右栏（DetailPanel）的折叠/展开交互，折叠时仅显示图标按钮，展开时恢复完整内容。",
+    "steps": [
+      "在全局状态中添加 leftPanelCollapsed: boolean 和 rightPanelCollapsed: boolean，默认 false。",
+      "左栏折叠按钮：位于 AgentPanel 右边缘（垂直居中），点击后左栏宽度从 240px 动画过渡到 40px，内容隐藏，仅显示折叠按钮图标（»）。",
+      "右栏折叠按钮：位于 DetailPanel 左边缘（垂直居中），点击后右栏宽度从 420px 动画过渡到 40px，内容隐藏。",
+      "展开时点击折叠按钮，宽度动画恢复，内容重新渲染（从全局状态获取最新数据）。",
+      "CSS transition: width 0.2s ease-in-out，折叠/展开过程平滑。",
+      "折叠状态下中栏（KanbanBoard）自动扩展占据空余空间（flex: 1 自动调整）。",
+      "验证方式：点击左栏折叠按钮后左栏缩为窄条，中栏自动变宽；再次点击恢复；右栏同理。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 81,
+    "title": "前端：Agent 状态动画（CSS 实现）",
+    "description": "实现 Agent 卡片上 4 种状态的 CSS 动画效果：Idle 呼吸灯、Working 脉冲、Stuck 闪烁、Done 渐入。",
+    "steps": [
+      "创建 web/src/styles/agent-animations.css，定义 4 种状态动画的 CSS keyframes。",
+      "idle 呼吸灯：@keyframes breathe { 0%,100% { opacity: 0.5 } 50% { opacity: 1 } }，应用在 Agent 头像 emoji 上，animation-duration: 3s，animation-iteration-count: infinite，timing-function: ease-in-out。",
+      "working 脉冲：@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4) } 50% { box-shadow: 0 0 0 8px rgba(59,130,246,0) } }，应用在卡片状态色条和头像外圈，蓝色。",
+      "stuck 闪烁：@keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }，橙色，animation-duration: 1s，比呼吸灯快。",
+      "done 渐入：@keyframes fadeIn { from { opacity: 0; transform: scale(0.95) } to { opacity: 1; transform: scale(1) } }，一次性动画，animation-fill-mode: forwards。",
+      "使用 prefers-reduced-motion 媒体查询：用户开启减少动画时禁用所有循环动画。",
+      "验证方式：Agent 状态为 working 时卡片有蓝色脉冲效果；stuck 时有橙色闪烁；切换状态后动画正确切换。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 82,
+    "title": "前端：最小宽度检测与提示页面",
+    "description": "实现窗口宽度检测，低于 1280px 时覆盖显示 '请使用更大屏幕' 提示，阻止用户在过窄屏幕上操作。",
+    "steps": [
+      "在 App.tsx 中使用 window.innerWidth 和 resize 事件监听（或 useWindowSize 自定义 Hook）。",
+      "当 window.innerWidth < 1280 时，渲染全屏覆盖层（position: fixed, z-index: 9999），显示 '请使用更大屏幕' 提示文字和设备图标，隐藏主内容。",
+      "覆盖层样式：居中显示，灰色背景，大号文字。",
+      "当窗口 resize 回到 >= 1280 时，自动移除覆盖层，恢复正常界面。",
+      "使用 useEffect 注册 resize 监听器，cleanup 时移除。",
+      "验证方式：浏览器窗口缩窄至 1200px 时出现全屏提示；拉宽至 1300px 时提示消失，界面正常显示。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 83,
+    "title": "前端：Project 内嵌创建（Task 表单中新建 Project 流程）",
+    "description": "在 Task 创建表单的 '所属 Project' 下拉框中增加 '新建 Project' 选项，选中后展开 Project 名称和路径输入框，提交时同时创建 Project 和 Task。",
+    "steps": [
+      "在 TaskFormModal.tsx 的 Project 下拉框中，在已有 Project 列表末尾添加 '➕ 新建 Project' 选项。",
+      "选中 '新建 Project' 时，下拉框下方展开两个输入框：项目名称（input，只允许 [a-zA-Z0-9_-]）和绝对路径（input），以及可选描述（input）。",
+      "展开时带 CSS transition 动画（height 从 0 到 auto）。",
+      "项目名称实时校验：不符合 [a-zA-Z0-9_-] 时红色提示 '只允许字母、数字、下划线和连字符'。",
+      "提交表单时：若选择了 '新建 Project'，先调用 api.createProject({ name, path, description })，成功后用返回的 project.id 作为 Task 的 projectId 调用 api.createTask()。",
+      "创建 Project 失败时（如路径不存在），在 Project 输入区域显示错误信息，不提交 Task。",
+      "验证方式：在 Task 表单中选择 '新建 Project'，输入有效名称和路径后提交，Project 列表新增一条，Task 关联到新 Project。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 84,
+    "title": "后端：dotenv 环境变量加载与配置校验",
+    "description": "在 Server 启动时加载 .env 文件中的环境变量，并校验关键配置项的有效性。",
+    "steps": [
+      "安装 dotenv 依赖，在 server/index.ts 最顶部调用 import 'dotenv/config'。",
+      "定义配置接口 EnvConfig：{ PORT: number, MAX_CONCURRENT_TASKS: number, MAX_WS_CLIENTS: number, TOOL_APPROVAL_TIMEOUT_MS: number, USER_MESSAGE_TIMEOUT_MS: number, NODE_ENV: string }。",
+      "实现 loadConfig(): EnvConfig 函数：读取各环境变量，PORT 默认 3456，MAX_CONCURRENT_TASKS 默认 10，MAX_WS_CLIENTS 默认 10，TOOL_APPROVAL_TIMEOUT_MS 默认 300000，USER_MESSAGE_TIMEOUT_MS 默认 1800000。",
+      "校验：PORT 在 1024-65535 范围内，MAX_CONCURRENT_TASKS 在 1-50 范围内，超范围值打印警告并使用默认值。",
+      "Server 只监听 127.0.0.1（localhost），不监听 0.0.0.0，防止暴露到局域网。",
+      "验证方式：创建 .env 文件设置 PORT=4000，启动 Server 后监听 127.0.0.1:4000；不设 PORT 时默认 3456。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 85,
+    "title": "后端：生产模式构建（Express 服务前端静态文件）",
+    "description": "实现生产模式下的构建和部署：后端 tsc 编译、前端 vite build，Express 同时提供前端静态文件和 API。",
+    "steps": [
+      "在 server/package.json 添加 build 脚本：tsc --project tsconfig.json，输出到 server/dist/。",
+      "在 web/package.json 添加 build 脚本：vite build，输出到 web/dist/。",
+      "在 server/index.ts 中添加静态文件服务：当 NODE_ENV !== 'development' 时，app.use(express.static(path.join(__dirname, '../../web/dist')))。",
+      "添加 SPA fallback：非 /api 和 /ws 开头的 GET 请求返回 web/dist/index.html（支持前端路由）。",
+      "创建根目录 build.js 脚本：依次运行 npm run build --prefix web 和 tsc --project server/tsconfig.json。",
+      "验证方式：运行 build.js 后 server/dist/ 和 web/dist/ 目录存在；启动 node server/dist/index.js 后访问 http://localhost:3456 可看到前端页面，API 正常工作。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 86,
+    "title": "单元测试：eventProcessor 事件去重与 duration 计算",
+    "description": "为 eventProcessor 的核心逻辑编写单元测试：事件去重（同一 id 不重复处理）和工具调用 duration 计算（PostToolUse 与 PreToolUse 时间差）。",
+    "steps": [
+      "创建 server/tests/eventProcessor.test.ts，使用 Vitest。",
+      "测试去重：发送相同 id 的 Event 两次，processEvent 只处理一次（processedIds 集合大小为 1，eventCount 只 +1）。",
+      "测试不同 id 的 Event 正常处理两次。",
+      "测试 duration 计算：发送 PreToolUse Event（时间 T），再发送 PostToolUse Event（时间 T+1500ms），后者的 duration 字段应为 1500。",
+      "测试无匹配 PreToolUse 的 PostToolUse Event：duration 字段为 undefined。",
+      "测试 JSONL 写入：processEvent 后 data/events/<taskId>.jsonl 文件新增一行 JSON，内容与 Event 对象一致。",
+      "Mock fileStore 的写操作，验证调用次数与预期一致。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 87,
+    "title": "单元测试：messageParser SDK 消息解析",
+    "description": "为 messageParser 的 SDK 消息流 → Event 转换逻辑编写单元测试，覆盖三种消息类型的解析。",
+    "steps": [
+      "创建 server/tests/messageParser.test.ts，使用 Vitest。",
+      "测试 SDKInit 消息解析：构造 { type: 'system', subtype: 'init', session_id: 'sid-123' }，parseMessage 返回 eventType='SDKInit'，taskId 和 sessionId 正确填充。",
+      "测试 SDKAssistant 消息解析（工具调用）：构造含 tool_use content block 的 SDKAssistantMessage，parseMessage 返回 eventType='SDKAssistant'，toolName 和 toolInput 正确提取。",
+      "测试 SDKAssistant 消息解析（文本输出）：构造含 text content block 的消息，parseMessage 返回的 Event 中 toolOutput 为文本摘要。",
+      "测试 SDKResult 消息解析：构造含 result 和 cost_usd 字段的消息，parseMessage 返回 eventType='SDKResult'，output 正确提取。",
+      "测试未知消息类型：parseMessage 返回 null。",
+      "测试 toolInput 截断：构造超长 toolInput（>10KB），parseMessage 返回的 toolInput 被截断。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 88,
+    "title": "单元测试：validateProject 路径校验",
+    "description": "为 Project 校验函数编写单元测试，覆盖名称格式校验和路径校验的各种边界情况。",
+    "steps": [
+      "创建 server/tests/validateProject.test.ts，使用 Vitest。",
+      "测试合法名称：'my-project_01' 返回 valid: true。",
+      "测试非法名称：'my project'（含空格）返回 valid: false；'项目名'（含中文）返回 valid: false；'a/b'（含斜杠）返回 valid: false。",
+      "测试绝对路径：'/home/user/project' 返回 valid: true（假设存在）；'./relative/path' 返回 valid: false（非绝对路径）。",
+      "测试路径不存在：'/nonexistent/path/12345' 返回 valid: false。",
+      "测试边界：名称为空字符串返回 valid: false；路径为空字符串返回 valid: false。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 89,
+    "title": "单元测试：wsBroadcaster WebSocket 广播",
+    "description": "为 wsBroadcaster 的广播逻辑编写单元测试，验证消息格式、连接管理、断连清理。",
+    "steps": [
+      "创建 server/tests/wsBroadcaster.test.ts，使用 Vitest + mock WebSocket。",
+      "测试 broadcast：注册 2 个 mock ws 客户端，调用 broadcast('task:update', { task: { id: '1' } })，两个客户端均收到 JSON 字符串消息。",
+      "测试断连客户端清理：模拟一个客户端 readyState 为 CLOSED，broadcast 时该客户端被跳过，消息只发给 OPEN 状态的客户端。",
+      "测试最大连接数限制：超过 MAX_WS_CLIENTS 时新连接被拒绝并关闭。",
+      "测试心跳检测：模拟 ping/pong 交互，未响应 pong 的客户端被移除。",
+      "测试空客户端列表：broadcast 不报错，静默返回。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 90,
+    "title": "前端组件测试：TaskCard 与 AgentCard 渲染",
+    "description": "使用 vitest + react-testing-library 为 TaskCard 和 AgentCard 组件编写渲染测试，验证不同状态下的正确渲染。",
+    "steps": [
+      "安装 @testing-library/react、@testing-library/jest-dom、jsdom 依赖。",
+      "配置 vitest 的 web/vitest.config.ts：environment: 'jsdom'，setupFiles 引入 @testing-library/jest-dom。",
+      "测试 TaskCard 渲染：传入 Todo 状态 Task，验证显示启动/编辑/删除按钮；传入 Running 状态，验证显示停止/标记完成按钮。",
+      "测试 TaskCard 点击：点击卡片主体触发 onSelect 回调。",
+      "测试 AgentCard 渲染：传入 working 状态 Agent，验证卡片左边缘色条为蓝色（#3B82F6）；传入 stuck 状态，验证色条为橙色。",
+      "测试空状态：传入 taskCount=0 的 Agent，验证显示 '无待处理任务'。",
+      "验证方式：vitest run 全部前端组件测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 91,
+    "title": "前端组件测试：KanbanBoard 分列渲染与过滤",
+    "description": "为 KanbanBoard 组件编写测试，验证 Task 按状态分列渲染和 Project 过滤功能。",
+    "steps": [
+      "创建 web/src/components/__tests__/KanbanBoard.test.tsx。",
+      "测试分列：传入 2 个 Todo Task + 1 个 Running Task + 1 个 Done Task，验证 Todo 列渲染 2 张卡片、Running 列 1 张、Done 列 1 张。",
+      "测试 Project 过滤：设置 activeProjectId='p1'，验证只渲染 projectId='p1' 的 Task。",
+      "测试空列：传入 0 个 Running Task，验证 Running 列显示空状态。",
+      "测试排序：传入 priority 不同的 Task，验证高优先级 Task 排在前面。",
+      "使用 Mock 提供 Context（agents、tasks、projects 状态）。",
+      "验证方式：vitest run 全部测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 92,
+    "title": "前端组件测试：表单验证（Agent/Task FormModal）",
+    "description": "为 Agent 和 Task 创建表单编写验证逻辑测试，确保字段校验规则正确执行。",
+    "steps": [
+      "创建 web/src/components/__tests__/AgentFormModal.test.tsx。",
+      "测试 Agent 表单验证：名称为空时提交按钮禁用；prompt 少于 10 字符时显示红色错误提示；预算上限输入 0 时报错。",
+      "测试 Agent 表单提交：填写合法数据后点击提交，验证调用 api.createAgent 一次，参数正确。",
+      "创建 web/src/components/__tests__/TaskFormModal.test.tsx。",
+      "测试 Task 表单验证：description 少于 10 字符时提交按钮禁用；未选择 Agent 时提交按钮禁用。",
+      "测试编辑模式：传入已有 Task 数据，验证表单字段预填充正确。",
+      "验证方式：vitest run 全部表单测试通过。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 93,
+    "title": "工程化：ESLint + Prettier 配置",
+    "description": "配置后端和前端的 ESLint 代码检查与 Prettier 格式化规则，统一代码风格。",
+    "steps": [
+      "在根目录安装 eslint、prettier、@typescript-eslint/parser、@typescript-eslint/eslint-plugin 等依赖。",
+      "创建 .eslintrc.json：extends 推荐 TypeScript 规则集，添加 no-console: warn（生产环境）、no-unused-vars: error。",
+      "创建 .prettierrc：{ semi: true, singleQuote: true, trailingComma: 'es5', tabWidth: 2, printWidth: 100 }。",
+      "在 server/package.json 和 web/package.json 添加 lint 脚本：eslint 'src/**/*.ts' --fix。",
+      "在根目录 package.json 添加 lint-all 脚本：同时 lint server/ 和 web/。",
+      "验证方式：运行 npm run lint-all，代码风格一致，无 ESLint 错误（warning 可忽略）。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 94,
+    "title": "工程化：生产模式打包验证（单进程运行）",
+    "description": "验证生产模式构建后的单进程部署：Express 同时服务前端静态文件和后端 API，功能与开发模式一致。",
+    "steps": [
+      "运行 node build.js 完成前后端构建。",
+      "设置 NODE_ENV=production，启动 node server/dist/index.js。",
+      "验证 GET http://localhost:3456 返回前端 HTML 页面（静态文件服务生效）。",
+      "验证 GET http://localhost:3456/api/health 返回 { status: 'ok' }。",
+      "验证创建 Agent、创建 Task 的 API 流程正常（curl 测试）。",
+      "验证 WebSocket ws://localhost:3456/ws 可连接。",
+      "验证前端页面可正常操作（浏览器手动验证：创建 Agent → 创建 Task → 启动）。",
+      "验证方式：生产模式单进程完整跑通创建 Agent → 创建 Task → 启动 → 完成。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 95,
+    "title": "前端：确认弹窗组件（web/src/components/ConfirmDialog.tsx）",
+    "description": "实现通用确认弹窗组件，用于删除 Agent、删除 Task、停止 Task 等危险操作的二次确认。",
+    "steps": [
+      "创建 ConfirmDialog.tsx，接收 title: string、message: string、confirmText: string、dangerous: boolean、onConfirm: () => void、onCancel: () => void props。",
+      "弹窗样式：居中模态框（position: fixed），半透明背景遮罩，点击遮罩触发 onCancel。",
+      "显示标题（粗体）、描述文字、'取消' 按钮（灰色）、确认按钮（dangerous=true 时红色，否则蓝色）。",
+      "确认按钮点击后进入 loading 状态（异步 onConfirm 支持），成功后自动关闭弹窗。",
+      "支持键盘操作：Enter 触发 onConfirm，Escape 触发 onCancel。",
+      "删除 Agent 时 message 显示 '该 Agent 有 N 条历史任务记录将保留，但 Agent 配置将永久删除。'。",
+      "验证方式：删除 Agent 时弹出确认框，点击确认后 Agent 被删除；点击取消后弹窗关闭无操作。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 96,
+    "title": "前端：Task 重试按钮交互",
+    "description": "实现 Done/Cancelled 状态 Task 卡片上的 '重试' 按钮交互：点击后创建新 Task（title 追加 '(重试)'），跳转到新 Task 详情。",
+    "steps": [
+      "在 TaskCard 组件中，Done/Cancelled 状态显示 🔄重试按钮。",
+      "点击重试按钮后调用 api.retryTask(taskId)，获取返回的新 Task。",
+      "重试按钮点击后进入 loading 状态，防止重复点击。",
+      "新 Task 创建成功后：全局状态更新（ADD_TASK），看板 Todo 列新增一张卡片。",
+      "自动选中新 Task：更新 selectedTaskId，右侧详情面板切换到新 Task 的详情。",
+      "API 失败时显示红色 Toast 通知。",
+      "验证方式：Done Task 点击重试后看板 Todo 列出现新 Task（标题含 '(重试)'），详情面板自动切换到新 Task。"
+    ],
+    "passes": false
+  },
+  {
+    "id": 97,
+    "title": "前端：Agent 创建表单中 Working 状态 Agent 选择警告",
+    "description": "在 Task 创建/编辑表单的 Agent 下拉选择中，当用户选择 Working 状态的 Agent 时显示警告提示。",
+    "steps": [
+      "在 TaskFormModal 的 Agent 下拉框中，每个 Agent 选项显示名称 + 当前状态标识（🟢 Idle / 🔵 Working / 🟡 Stuck / ⚫ Offline）。",
+      "Working/Stuck 状态的 Agent 选项文字颜色较浅（灰色），但不禁用选择（允许选择但需提示）。",
+      "选中 Working 状态 Agent 时，下拉框下方显示黄色警告条：'⚠️ 该 Agent 当前正在执行任务，启动按钮将置灰直到 Agent 空闲'。",
+      "选中 Offline 状态 Agent 时，下拉框下方显示红色警告条：'⚠️ 该 Agent 已停用，无法启动任务'。",
+      "验证方式：Task 表单选择 Working Agent 后下方出现黄色警告；选择 Idle Agent 后无警告。"
+    ],
+    "passes": false
+  }
+]

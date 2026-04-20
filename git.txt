@@ -1,0 +1,3 @@
+git remote add origin https://github.com/GitHub-Ninghai/AI4S_Data_Agent_Swarm.git
+git branch -M main
+git push -u origin main
