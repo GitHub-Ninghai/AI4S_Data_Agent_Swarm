@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Status
 
-项目处于**规划阶段**，尚未编写实现代码。`requirement.md` 是完整的架构设计文档（1800+ 行），`task.json` 包含 67+ 项开发任务（全部 `passes: false`）。开发应从 Task #1（项目初始化）和 Task #2（SDK 探针验证）开始。
+项目处于**开发阶段**。Task #1（项目初始化）已完成，目录结构和基础配置就绪。当前进度：从 Task #2（SDK 探针验证）开始。`task.json` 包含 67+ 项开发任务。
 
 ## Architecture
 
@@ -167,6 +167,22 @@ See planned `.env.example`:
 | MAX_WS_CLIENTS | 10 | WebSocket connection limit |
 | TOOL_APPROVAL_TIMEOUT_MS | 300000 | Auto-deny after 5 min |
 | USER_MESSAGE_TIMEOUT_MS | 1800000 | User message wait (30 min) |
+
+## Post-Task Workflow (MANDATORY)
+
+每完成一个 task.json 中的 Task 后，**必须自动执行以下步骤**，无需用户提醒：
+
+1. **更新 WORKLOG.md** — 在文件末尾追加本次 Task 的日志条目，包含：
+   - Task ID 和标题
+   - 完成日期
+   - 完成内容摘要（做了什么）
+   - 验证结果（通过了哪些检查）
+   - 下一步（下一个 Task 是什么）
+2. **Git 提交** — 将所有变更（含 WORKLOG.md）提交到 git，commit message 格式：
+   ```
+   feat: Task #N 标题 — 简要说明
+   ```
+3. **推送到 GitHub** — `git push origin main`
 
 ## Reference Documents
 
