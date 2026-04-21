@@ -300,3 +300,47 @@ Task #6: 后端 — WebSocket Server 与广播服务
 ### 下一步
 
 Task #7: 后端 — Project 管理 API（CRUD）
+
+---
+
+## Task #7: 后端 — Project 管理 API（CRUD）
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/routes/projects.ts`** — Project CRUD REST API
+   - `GET /api/projects` → `{ projects: Project[] }`
+   - `POST /api/projects` → 校验 name `[a-zA-Z0-9_-]` + path 绝对路径且存在 → 201 创建
+   - `PUT /api/projects/:id` → 部分更新 name/path/description → 校验同 POST
+   - `DELETE /api/projects/:id` → 检查是否有 Running/Stuck Task → 409 RESOURCE_HAS_DEPENDENTS 保护
+   - 404 PROJECT_NOT_FOUND 统一错误格式
+   - 每次变更后 WebSocket 广播 `project:update` / `project:delete`
+
+2. **`server/app.ts` 更新**
+   - 注册路由 `app.use("/api/projects", projectsRouter)`
+   - `startServer(overridePort?)` 支持随机端口（port 0），解决测试端口冲突
+
+3. **`server/routes/projects.test.ts`** — 12 个集成测试
+   - GET 空列表
+   - POST 创建成功、无效 name、缺少 name、相对路径、不存在路径
+   - PUT 更新 description、404、无效 name
+   - DELETE 成功、404、有活跃 Task 时 409 保护
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| GET /api/projects | ✅ |
+| POST 校验 | ✅ 5 项 |
+| PUT 更新 | ✅ |
+| PUT 404 | ✅ |
+| DELETE 成功 | ✅ |
+| DELETE 404 | ✅ |
+| DELETE 409 保护 | ✅ |
+| 全部测试 (47) | ✅ |
+
+### 下一步
+
+Task #8: 后端 — Agent 管理 API（GET）

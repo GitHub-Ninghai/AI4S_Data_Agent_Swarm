@@ -6,6 +6,7 @@ import http from "node:http";
 import { loadAllStores } from "./store/index.js";
 import * as taskStore from "./store/taskStore.js";
 import { initWebSocket, getConnectedClientCount } from "./services/wsBroadcaster.js";
+import { projectsRouter } from "./routes/projects.js";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -39,6 +40,12 @@ app.use(
 );
 
 app.use(express.json({ limit: "10mb" }));
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
+
+app.use("/api/projects", projectsRouter);
 
 // ---------------------------------------------------------------------------
 // Health check
@@ -102,22 +109,25 @@ app.use(
 // Start (only when run directly, not when imported)
 // ---------------------------------------------------------------------------
 
-export async function startServer(): Promise<void> {
+export async function startServer(overridePort?: number): Promise<void> {
+  const port = overridePort ?? PORT;
+
   await loadAllStores();
 
   // Initialise WebSocket on the same HTTP server
   initWebSocket(server, MAX_WS_CLIENTS);
 
   return new Promise((resolve) => {
-    server.listen(PORT, "127.0.0.1", () => {
+    server.listen(port, "127.0.0.1", () => {
+      const addr = server.address() as { port: number };
       console.log(
-        `[Agent Swarm] Server listening on http://127.0.0.1:${PORT}`,
+        `[Agent Swarm] Server listening on http://127.0.0.1:${addr.port}`,
       );
       console.log(
-        `[Agent Swarm] WebSocket: ws://127.0.0.1:${PORT}/ws`,
+        `[Agent Swarm] WebSocket: ws://127.0.0.1:${addr.port}/ws`,
       );
       console.log(
-        `[Agent Swarm] Health check: http://127.0.0.1:${PORT}/api/health`,
+        `[Agent Swarm] Health check: http://127.0.0.1:${addr.port}/api/health`,
       );
       resolve();
     });
