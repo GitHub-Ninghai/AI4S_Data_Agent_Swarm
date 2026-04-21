@@ -948,4 +948,40 @@ Task #36: 前端 — REST API 客户端 — 基础封装与 Agent/Project API
 
 ### 下一步
 
-Task #36: 前端 — REST API 客户端 — 基础封装与 Agent/Project API
+Task #37: 前端 — WebSocket 客户端 Hook（useWebSocket.ts）
+
+---
+
+## Task #36: 前端 — REST API 客户端 — 基础封装与 Agent/Project API
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/types.ts`** — 前端共享 TypeScript 接口
+   - 与后端 `server/store/types.ts` 对齐: `Project`, `Agent`, `AgentStats`, `AgentStatus`, `Task`, `TaskStatus`, `Event`, `EventType`, `HealthStatus`
+   - WebSocket 类型: `WSMessageType`, `WSMessage<T>`
+   - API 辅助类型: `PaginatedResponse<T>`, `CreateAgentData`, `UpdateAgentData`, `CreateProjectData`, `UpdateProjectData`, `CreateTaskData`, `UpdateTaskData`
+
+2. **`web/src/api/client.ts`** — 完整 REST API 客户端
+   - `ApiError` 类: 含 `code`, `message`, `status` 属性
+   - `request<T>(method, path, body?)`: 基础 fetch 封装，自动处理 JSON/错误
+   - Health API: `getHealth()`
+   - Agent API: `getAgents`, `getAgent`, `createAgent`, `updateAgent`, `deleteAgent`, `getAgentStats`
+   - Project API: `getProjects`, `createProject`, `updateProject`, `deleteProject`
+   - Task API: `getTasks(queryOpts)`, `getTask`, `createTask`, `updateTask`, `deleteTask`
+   - Task Actions: `startTask`, `stopTask`, `doneTask`, `messageTask`, `approveTool`, `retryTask`
+   - Event API: `getTaskEvents`, `getTaskSdkStatus`
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ 无错误 |
+| Vite 生产构建 | ✅ 501ms |
+| 类型与后端对齐 | ✅ 完全匹配 |
+
+### 下一步
+
+Task #37: 前端 — WebSocket 客户端 Hook（useWebSocket.ts）
