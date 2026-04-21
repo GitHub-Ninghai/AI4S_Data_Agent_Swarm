@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { AppProvider, useAppState, useAppDispatch } from "./store/AppContext";
 import { AgentPanel } from "./components/AgentPanel";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { DetailPanel } from "./components/DetailPanel";
 
 const MIN_WIDTH = 1280;
 
@@ -126,7 +127,7 @@ function MainLayout() {
         </div>
         {!rightCollapsed && (
           <div className="panel-body">
-            <p className="panel-placeholder">详细信息</p>
+            <DetailPanel />
           </div>
         )}
       </div>

@@ -702,3 +702,383 @@ body {
   font-size: 1.5rem;
   margin-bottom: 0.375rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * DetailPanel
+ * --------------------------------------------------------------------------- */
+
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #999;
+}
+
+.detail-empty-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.detail-content {
+  padding: 0.75rem;
+}
+
+.detail-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 0.5rem;
+}
+
+.detail-section {
+  margin-bottom: 1rem;
+}
+
+.detail-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin-bottom: 0.375rem;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.detail-status {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #fff;
+  background: #9ca3af;
+}
+
+.detail-status-running { background: #3b82f6; }
+.detail-status-done { background: #34c759; }
+.detail-status-stuck { background: #f59e0b; }
+.detail-status-cancelled { background: #ff3b30; }
+.detail-status-idle { background: #9ca3af; }
+.detail-status-working { background: #3b82f6; }
+.detail-status-offline { background: #6b7280; }
+
+.detail-agent {
+  font-size: 0.8125rem;
+  color: #333;
+}
+
+.detail-enabled {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.detail-times {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.detail-desc {
+  font-size: 0.8125rem;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.detail-output {
+  font-size: 0.75rem;
+  background: #f5f5f7;
+  padding: 0.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Agent detail */
+
+.detail-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.detail-agent-avatar {
+  font-size: 2.5rem;
+}
+
+.detail-agent-role {
+  font-size: 0.8125rem;
+  color: #666;
+}
+
+.detail-prompt {
+  font-size: 0.75rem;
+  color: #333;
+  background: #f5f5f7;
+  padding: 0.5rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.detail-expand-btn {
+  display: inline;
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+}
+
+.detail-config {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: #666;
+}
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.detail-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+.detail-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.detail-stat-label {
+  font-size: 0.6875rem;
+  color: #999;
+}
+
+/* ---------------------------------------------------------------------------
+ * ActivityTimeline
+ * --------------------------------------------------------------------------- */
+
+.timeline-empty {
+  text-align: center;
+  color: #999;
+  font-size: 0.8125rem;
+  padding: 1rem 0;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+  border-left: 2px solid #e5e5ea;
+  padding-left: 0.75rem;
+  position: relative;
+}
+
+.timeline-item-active {
+  border-left-color: #3b82f6;
+}
+
+.timeline-item-result {
+  border-left-color: #34c759;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -10px;
+  top: 0.375rem;
+  font-size: 0.75rem;
+  background: #fff;
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: #666;
+}
+
+.timeline-type {
+  font-weight: 600;
+  color: #333;
+}
+
+.timeline-tool {
+  color: #3b82f6;
+}
+
+.timeline-duration {
+  color: #34c759;
+}
+
+.timeline-time {
+  margin-left: auto;
+  color: #aaa;
+}
+
+.timeline-detail {
+  margin-top: 0.25rem;
+}
+
+.timeline-pre {
+  font-size: 0.6875rem;
+  font-family: "SF Mono", "Fira Code", monospace;
+  background: #f5f5f7;
+  padding: 0.25rem 0.375rem;
+  border-radius: 3px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 100px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.timeline-output {
+  margin-top: 0.125rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * BudgetBar
+ * --------------------------------------------------------------------------- */
+
+.budget-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.budget-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.budget-label {
+  font-size: 0.75rem;
+  color: #666;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.budget-track {
+  flex: 1;
+  height: 6px;
+  background: #e5e5ea;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.budget-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ---------------------------------------------------------------------------
+ * ToolApproval
+ * --------------------------------------------------------------------------- */
+
+.tool-approval {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.tool-approval-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #92400e;
+  margin-bottom: 0.5rem;
+}
+
+.tool-approval-reason {
+  font-size: 0.75rem;
+  color: #92400e;
+  margin-bottom: 0.375rem;
+}
+
+.tool-approval-info {
+  margin-bottom: 0.5rem;
+}
+
+.tool-approval-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.tool-approval-input {
+  font-size: 0.6875rem;
+  font-family: "SF Mono", "Fira Code", monospace;
+  background: #fff;
+  padding: 0.375rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.tool-approval-expand {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 0.6875rem;
+}
+
+.tool-approval-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-approval-message {
+  display: flex;
+  gap: 0.375rem;
+  align-items: flex-end;
+}
+
+.tool-approval-message .form-textarea {
+  flex: 1;
+}

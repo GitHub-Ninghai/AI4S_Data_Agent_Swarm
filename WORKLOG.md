@@ -1160,4 +1160,56 @@ Task #44: 前端 — DetailPanel 组件
 
 ### 下一步
 
-Task #44: 前端 — DetailPanel 组件
+Task #49: 前端 — Notification 通知队列组件
+
+---
+
+## Task #44-#48: 前端 — ActivityTimeline + BudgetBar + ToolApproval + DetailPanel 组件
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/components/ActivityTimeline.tsx`** — 事件时间线
+   - 垂直时间线布局，每个事件节点含图标、类型、工具名、duration、时间戳
+   - 事件类型图标映射: SDKInit🚀, SDKAssistant🤖, SDKResult✅, PreToolUse🔧 等
+   - 当前执行事件高亮(蓝色左边条)，SDKResult 绿色标识
+   - 自动滚动到底部，事件输入/输出截断 200 字符
+
+2. **`web/src/components/BudgetBar.tsx`** — 预算进度条
+   - 预算消耗和轮次使用两条进度条
+   - 颜色随使用率变化: <70% 绿色, 70-90% 橙色, >90% 红色
+   - 显示具体数字: `$X.XX / $Y.YY` 和 `N / M 轮次`
+
+3. **`web/src/components/ToolApproval.tsx`** — 工具审批面板
+   - 显示被拦截的工具调用详情(stuck reason, toolName, toolInput)
+   - toolInput 等宽字体展示，500 字符截断可展开
+   - 允许/拒绝按钮 + 自定义消息输入框
+   - 按钮 loading 状态
+
+4. **`web/src/components/DetailPanel.tsx`** — 右侧详情面板
+   - 根据 selectedTaskId/selectedAgentId 切换视图
+   - Task 详情: 标题、状态、Agent、时间、描述、输出、BudgetBar、ActivityTimeline
+   - Stuck 状态自动显示 ToolApproval
+   - Agent 详情: 头像、名称、角色、Prompt(可展开)、配置、统计数据
+   - 空状态提示
+
+5. **`web/src/App.tsx`** — 右栏集成 DetailPanel
+
+6. **`web/src/index.css`** — DetailPanel + 子组件完整样式
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ |
+| Vite 生产构建 | ✅ 564ms，40 模块 |
+| ActivityTimeline 事件渲染 | ✅ |
+| BudgetBar 进度条颜色 | ✅ |
+| ToolApproval 审批面板 | ✅ |
+| DetailPanel Task/Agent 视图切换 | ✅ |
+
+### 下一步
+
+Task #49: 前端 — Notification 通知队列组件
