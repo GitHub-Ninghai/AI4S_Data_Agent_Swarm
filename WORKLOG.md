@@ -830,4 +830,73 @@ Task #27-#32: 后端 — Event 管道、Stuck 检测与崩溃恢复
 
 ### 下一步
 
-Task #33: 后端 — Hook 脚本与注册工具
+Task #34: 后端 — 日志策略与日志轮转
+
+---
+
+## Task #33: 后端 — Hook 脚本与注册工具
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`hooks/eventHook.sh`** — Claude Code Hook 事件转发脚本
+   - 从 stdin 读取 JSON，用 `jq` 提取 6 个字段（hook_event_name/session_id/cwd/tool_name/tool_input/tool_output）
+   - `tool_input` 截断至 10KB（超出部分裁剪）
+   - 紧凑 JSON 格式（`jq -c`）追加到 `data/logs/hooks.log`
+   - `curl POST` 转发到 `http://localhost:3456/event`，静默失败
+   - 使用 `bash ./hooks/eventHook.sh` 作为 Hook 命令（兼容 Git Bash）
+
+2. **`scripts/register-hooks.js`** — Hook 自动注册工具
+   - 自动检测 Claude Code 配置目录（优先 `claude --config-dir`，回退到默认路径）
+   - 注册 4 个 Hook 事件：Stop、SessionStart、SessionEnd、Notification
+   - 幂等：已注册的 Hook 跳过，不重复添加
+   - 支持 `--unregister` 参数注销 Hook
+   - 跨平台兼容（Windows/macOS/Linux）
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| eventHook.sh JSON 转发 | ✅ |
+| eventHook.sh 紧凑 JSON 输出 | ✅ |
+| eventHook.sh tool_input 10KB 截断 | ✅ |
+| register-hooks.js 首次注册 4 个 Hook | ✅ |
+| register-hooks.js 幂等跳过 | ✅ |
+| register-hooks.js settings.json 格式 | ✅ |
+
+### 下一步
+
+Task #34: 后端 — 日志策略与日志轮转
+
+---
+
+## Task #34: 后端 — 日志策略与日志轮转
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/services/logRotator.ts`** — 日志轮转工具
+   - `rotateIfNeeded(filePath, options)`: 检查文件大小，超过 maxBytes（默认 50MB）时执行轮转
+   - 轮转策略: `server.log` → `server.log.1` → ... → `server.log.5`（最多 5 个）
+   - 超出 maxFiles 的旧文件自动删除
+   - `FileLogger` 类: 封装文件日志写入 + 自动轮转，提供 info/warn/error 方法
+   - `log(level, message)`: 同时输出到 console 和 server.log 文件
+   - `rotateHooksLog()`: hooks.log 轮转入口
+
+2. **`server/services/logRotator.test.ts`** — 10 个单元测试
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| rotateIfNeeded 基本场景 | ✅ 6 项 |
+| FileLogger 功能 | ✅ 4 项 |
+| 全部测试 (240) | ✅ |
+
+### 下一步
+
+Task #35: 前端 — Vite + React + TypeScript 项目初始化
