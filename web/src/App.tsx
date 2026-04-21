@@ -1,7 +1,140 @@
 import { useState, useEffect } from "react";
-import { AppProvider } from "./store/AppContext";
+import { AppProvider, useAppState, useAppDispatch } from "./store/AppContext";
 
 const MIN_WIDTH = 1280;
+
+// ---------------------------------------------------------------------------
+// StatusBar — bottom bar
+// ---------------------------------------------------------------------------
+
+function StatusBar() {
+  const { agents, tasks, wsConnected } = useAppState();
+
+  const agentCount = agents.size;
+  const runningCount = [...tasks.values()].filter(
+    (t) => t.status === "Running",
+  ).length;
+
+  return (
+    <footer className="status-bar">
+      <span className="status-item">
+        {agentCount} Agents
+      </span>
+      <span className="status-divider">|</span>
+      <span className="status-item">
+        {runningCount} Running
+      </span>
+      <span className="status-divider">|</span>
+      <span className="status-item">
+        Server{" "}
+        <span
+          className={`status-dot ${wsConnected ? "status-dot-ok" : "status-dot-err"}`}
+        />
+        {!wsConnected && (
+          <span className="status-disconnected">连接中断</span>
+        )}
+      </span>
+    </footer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TopBar — header with project filter
+// ---------------------------------------------------------------------------
+
+function TopBar() {
+  const { projects, activeProjectId } = useAppState();
+  const dispatch = useAppDispatch();
+
+  return (
+    <header className="top-bar">
+      <h1 className="top-bar-title">Agent Swarm</h1>
+      <select
+        className="project-select"
+        value={activeProjectId ?? ""}
+        onChange={(e) =>
+          dispatch({
+            type: "SET_ACTIVE_PROJECT",
+            projectId: e.target.value || null,
+          })
+        }
+      >
+        <option value="">全部项目</option>
+        {projects.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </header>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MainLayout — three-column layout
+// ---------------------------------------------------------------------------
+
+function MainLayout() {
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  return (
+    <div className="main-layout">
+      <div
+        className={`panel panel-left ${leftCollapsed ? "panel-collapsed" : ""}`}
+      >
+        <div className="panel-header">
+          <span>Agents</span>
+          <button
+            className="collapse-btn"
+            onClick={() => setLeftCollapsed(!leftCollapsed)}
+            title={leftCollapsed ? "展开" : "折叠"}
+          >
+            {leftCollapsed ? "▶" : "◀"}
+          </button>
+        </div>
+        {!leftCollapsed && (
+          <div className="panel-body">
+            <p className="panel-placeholder">Agent 列表</p>
+          </div>
+        )}
+      </div>
+
+      <div className="panel panel-center">
+        <div className="panel-header">
+          <span>Tasks</span>
+        </div>
+        <div className="panel-body">
+          <p className="panel-placeholder">Kanban 看板</p>
+        </div>
+      </div>
+
+      <div
+        className={`panel panel-right ${rightCollapsed ? "panel-collapsed" : ""}`}
+      >
+        <div className="panel-header">
+          <button
+            className="collapse-btn"
+            onClick={() => setRightCollapsed(!rightCollapsed)}
+            title={rightCollapsed ? "展开" : "折叠"}
+          >
+            {rightCollapsed ? "◀" : "▶"}
+          </button>
+          <span>Detail</span>
+        </div>
+        {!rightCollapsed && (
+          <div className="panel-body">
+            <p className="panel-placeholder">详细信息</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AppInner — root layout
+// ---------------------------------------------------------------------------
 
 function AppInner() {
   const [tooSmall, setTooSmall] = useState(window.innerWidth < MIN_WIDTH);
@@ -25,16 +158,17 @@ function AppInner() {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Agent Swarm</h1>
-      </header>
-      <main className="app-main">
-        <p>Agent Swarm 正在启动...</p>
-      </main>
+    <div className="app-root">
+      <TopBar />
+      <MainLayout />
+      <StatusBar />
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// App — with AppProvider
+// ---------------------------------------------------------------------------
 
 export function App() {
   return (
