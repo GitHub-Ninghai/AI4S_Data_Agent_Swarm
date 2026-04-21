@@ -217,3 +217,43 @@ Task #4: 后端 — 内存状态管理（agents/tasks/sessions/projects Map）
 ### 下一步
 
 Task #5: 后端 — Express Server 入口与基础中间件
+
+---
+
+## Task #5: 后端 — Express Server 入口与基础中间件
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/app.ts`** — Express 应用配置（可被测试导入）
+   - CORS 中间件：允许 `localhost:5173`（Vite dev server）
+   - `express.json({ limit: '10mb' })` 请求体解析
+   - `GET /api/health`：返回 `{ status, version, uptime, activeTaskCount, maxConcurrentTasks, storageOk }`
+   - 统一错误处理中间件：格式化为 `{ error: { code, message, details } }`，500 错误隐藏详情
+   - `startServer()` 函数：加载 store → 启动 HTTP Server 监听 `127.0.0.1:3456`
+
+2. **`server/index.ts`** — 入口文件，导入 `app.ts` 并调用 `startServer()`
+
+3. **`server/server.test.ts`** — 5 个集成测试
+   - Health check 返回 `status: "ok"`
+   - `activeTaskCount` 为数字类型
+   - 未知路由返回 404
+   - CORS 允许 `localhost:5173`
+   - CORS 拒绝其他来源
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| Health check /api/health | ✅ |
+| CORS localhost:5173 | ✅ |
+| CORS 拒绝其他来源 | ✅ |
+| 404 未知路由 | ✅ |
+| Server 启动 | ✅ 127.0.0.1:3456 |
+| 全部测试 (30) | ✅ |
+
+### 下一步
+
+Task #6: 后端 — WebSocket Server 与广播服务
