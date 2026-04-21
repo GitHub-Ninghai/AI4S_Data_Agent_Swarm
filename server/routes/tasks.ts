@@ -4,6 +4,8 @@ import * as taskStore from "../store/taskStore.js";
 import * as agentStore from "../store/agentStore.js";
 import * as projectStore from "../store/projectStore.js";
 import { broadcast } from "../services/wsBroadcaster.js";
+import { taskManager, TaskManagerError } from "../services/taskManager.js";
+import { resolveToolDecision } from "../sdk/queryWrapper.js";
 import type { Task } from "../store/types.js";
 
 // ---------------------------------------------------------------------------
@@ -303,4 +305,230 @@ tasksRouter.delete("/:id", (req, res) => {
 
   broadcast("task:update", { id: req.params.id, deleted: true });
   res.json({ ok: true });
+});
+
+// POST /api/tasks/:id/start — start a Todo task
+tasksRouter.post("/:id/start", async (req, res, next) => {
+  try {
+    await taskManager.startTask(req.params.id);
+    const task = taskStore.getTaskById(req.params.id);
+    res.json({ task });
+  } catch (err) {
+    if (err instanceof TaskManagerError) {
+      return res.status(err.statusCode).json({
+        error: { code: err.code, message: err.message },
+      });
+    }
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/stop — cancel a running/stuck task
+tasksRouter.post("/:id/stop", (req, res, next) => {
+  try {
+    taskManager.cancelTask(req.params.id);
+    const task = taskStore.getTaskById(req.params.id);
+    res.json({ task });
+  } catch (err) {
+    if (err instanceof TaskManagerError) {
+      return res.status(err.statusCode).json({
+        error: { code: err.code, message: err.message },
+      });
+    }
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/done — manually mark as done
+tasksRouter.post("/:id/done", (req, res, next) => {
+  try {
+    taskManager.doneTask(req.params.id);
+    const task = taskStore.getTaskById(req.params.id);
+    res.json({ task });
+  } catch (err) {
+    if (err instanceof TaskManagerError) {
+      return res.status(err.statusCode).json({
+        error: { code: err.code, message: err.message },
+      });
+    }
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/message — send message to a stuck task (SDK resume)
+tasksRouter.post("/:id/message", async (req, res, next) => {
+  try {
+    const task = taskStore.getTaskById(req.params.id);
+    if (!task) {
+      return res.status(404).json({
+        error: { code: "TASK_NOT_FOUND", message: "Task not found" },
+      });
+    }
+
+    if (task.status !== "Stuck") {
+      return res.status(409).json({
+        error: {
+          code: "TASK_NOT_STUCK",
+          message: `Task status is ${task.status}, expected Stuck`,
+        },
+      });
+    }
+
+    const { message, allowTool } = req.body;
+    if (typeof message !== "string" || message.length === 0) {
+      return res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: "message is required" },
+      });
+    }
+
+    // Handle tool approval decision if provided
+    if (allowTool?.decision) {
+      resolveToolDecision(req.params.id, allowTool.decision);
+    }
+
+    // Resume task via SDK session manager
+    const agent = agentStore.getAgentById(task.agentId);
+    const project = projectStore.getProjectById(task.projectId);
+    if (!agent || !project || !task.sessionId) {
+      return res.status(409).json({
+        error: {
+          code: "CANNOT_RESUME",
+          message: "Missing agent, project, or session for resume",
+        },
+      });
+    }
+
+    const { sdkSessionManager } = await import("../services/sdkSessionManager.js");
+    await sdkSessionManager.resumeTask(
+      task.sessionId,
+      message,
+      task,
+      agent,
+      project.path,
+    );
+
+    // Transition task back to Running
+    taskStore.updateTask(req.params.id, { status: "Running", stuckReason: undefined });
+    agentStore.updateAgent(task.agentId, { status: "working" });
+
+    broadcast("task:update", {
+      id: req.params.id,
+      status: "Running",
+    });
+    broadcast("agent:update", {
+      id: task.agentId,
+      status: "working",
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/approve-tool — approve/deny a pending tool call
+tasksRouter.post("/:id/approve-tool", (req, res) => {
+  const task = taskStore.getTaskById(req.params.id);
+  if (!task) {
+    return res.status(404).json({
+      error: { code: "TASK_NOT_FOUND", message: "Task not found" },
+    });
+  }
+
+  if (task.status !== "Stuck") {
+    return res.status(409).json({
+      error: {
+        code: "TASK_NOT_STUCK",
+        message: `Task status is ${task.status}, expected Stuck`,
+      },
+    });
+  }
+
+  const { decision } = req.body;
+  if (decision !== "allow" && decision !== "deny") {
+    return res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "decision must be 'allow' or 'deny'",
+      },
+    });
+  }
+
+  const resolved = resolveToolDecision(req.params.id, decision);
+  if (!resolved) {
+    return res.status(404).json({
+      error: {
+        code: "NO_PENDING_APPROVAL",
+        message: "No pending tool approval for this task",
+      },
+    });
+  }
+
+  // If allowed, transition back to Running
+  if (decision === "allow") {
+    taskStore.updateTask(req.params.id, { status: "Running", stuckReason: undefined });
+    agentStore.updateAgent(task.agentId, { status: "working" });
+
+    broadcast("task:update", {
+      id: req.params.id,
+      status: "Running",
+    });
+    broadcast("agent:update", {
+      id: task.agentId,
+      status: "working",
+    });
+  }
+
+  res.json({ ok: true });
+});
+
+// POST /api/tasks/:id/retry — retry a completed/cancelled task
+tasksRouter.post("/:id/retry", (req, res) => {
+  const existing = taskStore.getTaskById(req.params.id);
+  if (!existing) {
+    return res.status(404).json({
+      error: { code: "TASK_NOT_FOUND", message: "Task not found" },
+    });
+  }
+
+  if (existing.status !== "Done" && existing.status !== "Cancelled") {
+    return res.status(409).json({
+      error: {
+        code: "TASK_NOT_RETRYABLE",
+        message: `Task status is ${existing.status}, can only retry Done/Cancelled tasks`,
+      },
+    });
+  }
+
+  // Create new task based on existing
+  const now = Date.now();
+  const newTask: Task = {
+    id: crypto.randomUUID(),
+    title: `${existing.title}(重试)`,
+    description: existing.description,
+    status: "Todo",
+    agentId: existing.agentId,
+    projectId: existing.projectId,
+    parentTaskId: existing.id,
+    priority: existing.priority,
+    tags: [...existing.tags],
+    eventCount: 0,
+    turnCount: 0,
+    budgetUsed: 0,
+    maxTurns: existing.maxTurns,
+    maxBudgetUsd: existing.maxBudgetUsd,
+    createdAt: now,
+  };
+
+  taskStore.createTask(newTask);
+
+  // Update agent taskCount
+  const agent = agentStore.getAgentById(existing.agentId);
+  if (agent) {
+    agentStore.updateAgent(existing.agentId, { taskCount: agent.taskCount + 1 });
+    broadcast("agent:update", agentStore.getAgentById(existing.agentId));
+  }
+
+  broadcast("task:update", newTask);
+  res.status(201).json({ task: newTask });
 });

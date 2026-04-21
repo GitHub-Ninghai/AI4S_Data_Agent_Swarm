@@ -673,4 +673,67 @@ Task #21: 后端 — Task 操作 API（start/cancel/done/retry）
 
 ### 下一步
 
-Task #21: 后端 — Task 操作 API（start/cancel/done/retry）
+Task #27: 后端 — Task Event 查询 API
+
+---
+
+## Task #21-#26: 后端 — Task 操作 API（start/stop/done/message/approve-tool/retry）
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/routes/tasks.ts`** 新增 6 个操作路由
+   - `POST /api/tasks/:id/start` — 启动 Todo Task
+     - 调用 `taskManager.startTask()`，含 Agent 状态和并发校验
+     - Task 状态先同步变为 Running，sessionId 通过 WebSocket 异步通知
+     - 返回 `{ task }`（status 已为 Running）
+   - `POST /api/tasks/:id/stop` — 取消运行中 Task
+     - 调用 `taskManager.cancelTask()`，中止 SDK 消息流
+     - Task → Cancelled，Agent → idle
+   - `POST /api/tasks/:id/done` — 手动标记完成
+     - 调用 `taskManager.doneTask()`，completedReason = 'user_done'
+   - `POST /api/tasks/:id/message` — 向 Stuck Task 发送消息（SDK resume）
+     - 接收 `{ message, allowTool? }`，支持附带工具审批决策
+     - 先调用 `resolveToolDecision()`，再调用 `sdkSessionManager.resumeTask()`
+     - Task Stuck → Running，Agent stuck → working
+   - `POST /api/tasks/:id/approve-tool` — 工具审批
+     - 接收 `{ decision: 'allow' | 'deny' }`
+     - 调用 `resolveToolDecision()` 解除 canUseTool 阻塞
+     - allow 时自动恢复 Running 状态
+   - `POST /api/tasks/:id/retry` — 重试已完成/已取消 Task
+     - 复制原 Task 配置创建新 Task，title 追加 '(重试)'
+     - `parentTaskId` 指向原 Task，状态为 Todo
+     - 保留原 Task 的 tags/maxTurns/maxBudgetUsd/priority
+
+2. **`server/routes/taskActions.test.ts`** — 27 个集成测试
+   - start: 启动成功、404不存在、非Todo拒绝、Agent禁用拒绝、Agent状态更新
+   - stop: 取消成功、404、Todo拒绝、Agent→idle
+   - done: 标记完成、404、Todo拒绝
+   - message: 404、非Stuck拒绝、空消息拒绝、发送成功恢复Running
+   - approve-tool: 404、非Stuck拒绝、无效decision、allow恢复Running
+   - retry: Done重试、Cancelled重试、404、Todo拒绝、Running拒绝、taskCount递增、配置保留
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| POST /start Todo→Running | ✅ |
+| POST /start Agent→working | ✅ |
+| POST /start 404/409 校验 | ✅ 3 项 |
+| POST /stop Running→Cancelled | ✅ |
+| POST /stop Agent→idle | ✅ |
+| POST /done Running→Done | ✅ |
+| POST /message Stuck→Running | ✅ |
+| POST /message 校验 | ✅ 3 项 |
+| POST /approve-tool allow | ✅ |
+| POST /approve-tool 校验 | ✅ 3 项 |
+| POST /retry Done→新Task | ✅ |
+| POST /retry 配置保留 | ✅ |
+| POST /retry 校验 | ✅ 3 项 |
+| 全部测试 (183) | ✅ |
+
+### 下一步
+
+Task #27: 后端 — Task Event 查询 API
