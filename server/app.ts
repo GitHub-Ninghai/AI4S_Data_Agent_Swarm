@@ -5,6 +5,7 @@ import cors from "cors";
 import http from "node:http";
 import { loadAllStores } from "./store/index.js";
 import * as taskStore from "./store/taskStore.js";
+import { initWebSocket, getConnectedClientCount } from "./services/wsBroadcaster.js";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -15,6 +16,7 @@ const MAX_CONCURRENT_TASKS = parseInt(
   process.env.MAX_CONCURRENT_TASKS || "10",
   10,
 );
+const MAX_WS_CLIENTS = parseInt(process.env.MAX_WS_CLIENTS || "10", 10);
 
 // ---------------------------------------------------------------------------
 // App & Server
@@ -103,10 +105,16 @@ app.use(
 export async function startServer(): Promise<void> {
   await loadAllStores();
 
+  // Initialise WebSocket on the same HTTP server
+  initWebSocket(server, MAX_WS_CLIENTS);
+
   return new Promise((resolve) => {
     server.listen(PORT, "127.0.0.1", () => {
       console.log(
         `[Agent Swarm] Server listening on http://127.0.0.1:${PORT}`,
+      );
+      console.log(
+        `[Agent Swarm] WebSocket: ws://127.0.0.1:${PORT}/ws`,
       );
       console.log(
         `[Agent Swarm] Health check: http://127.0.0.1:${PORT}/api/health`,

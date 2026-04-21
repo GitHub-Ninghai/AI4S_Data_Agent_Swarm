@@ -257,3 +257,46 @@ Task #5: 后端 — Express Server 入口与基础中间件
 ### 下一步
 
 Task #6: 后端 — WebSocket Server 与广播服务
+
+---
+
+## Task #6: 后端 — WebSocket Server 与广播服务
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/services/wsBroadcaster.ts`** — WebSocket 广播服务
+   - `initWebSocket(httpServer, maxClients)`: 在 HTTP Server 上集成 WebSocket，通过 `upgrade` 事件处理
+   - 并发连接数限制：超过 `MAX_WS_CLIENTS`（默认 10）时返回 429 并拒绝连接
+   - `broadcast(type, data)`: 向所有 `readyState === OPEN` 的客户端发送 `{ type, data }` JSON 消息
+   - 心跳检测：30 秒间隔 ping/pong，自动移除断线客户端
+   - `getConnectedClientCount()`: 返回当前连接数
+   - `closeWebSocket()`: 关闭所有连接并清理
+
+2. **`server/app.ts` 更新**
+   - `startServer()` 中调用 `initWebSocket(server, MAX_WS_CLIENTS)`
+   - 启动日志增加 WebSocket 地址
+
+3. **`server/services/wsBroadcaster.test.ts`** — 5 个测试
+   - 连接建立
+   - 客户端计数追踪
+   - 单客户端广播
+   - 多客户端广播
+   - 超出最大连接数拒绝
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| WebSocket 连接 | ✅ |
+| 客户端计数 | ✅ |
+| 单客户端广播 | ✅ |
+| 多客户端广播 | ✅ |
+| 连接数限制 | ✅ |
+| 全部测试 (35) | ✅ |
+
+### 下一步
+
+Task #7: 后端 — Project 管理 API（CRUD）
