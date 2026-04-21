@@ -560,4 +560,49 @@ Task #19: 后端 — SDKSessionManager
 
 ### 下一步
 
-Task #19: 后端 — SDKSessionManager
+Task #20: 后端 — TaskManager
+
+---
+
+## Task #19: 后端 — SDKSessionManager — 基础框架与 startTask/bindSession
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`server/services/sdkSessionManager.ts`** — SDK 会话生命周期管理（单例）
+   - `startTask(task, agent, projectDir)`: 调用 `startQuery()` 获取 stream/abortController → 注册到 `activeQueries` Map → 后台启动 `consumeStream()` 消费消息流
+   - `resumeTask(sessionId, message, task, agent, projectDir)`: 恢复已有 SDK 会话
+   - `stopTask(taskId)`: 中止 stream、清理映射
+   - `bindSession(taskId, sessionId)`: 绑定 SDK session_id → Task 双向映射（activeQueries + sessionReverseMap）
+   - `consumeStream()`: 异步消费 SDK 消息流 → `processMessage()` 处理每条消息
+   - `processMessage()`: 解析 SDK 消息 → 更新 Task 计数器(eventCount/turnCount/budgetUsed) → 广播 WebSocket 事件
+   - `handleTaskCompletion()`: 处理 SDKResult → 根据 subtype 设置 completedReason(sdk_result/max_turns/max_budget/error) → 更新 Agent 统计
+   - `handleStreamError()`: 处理 stream 异常 → 标记 Task 完成(reason=error)
+   - 查询方法: `getByTaskId()`, `getTaskIdBySession()`, `getActiveTaskCount()`, `hasActiveTask()`
+   - `stopAll()`: 批量停止所有活跃查询
+
+2. **`server/services/sdkSessionManager.test.ts`** — 9 个单元测试
+   - startTask: 注册查询、存储 AbortController
+   - stopTask: 中止并清理、处理不存在的 task
+   - bindSession: 绑定 session_id、建立双向映射、广播更新
+   - 查询方法: getByTaskId、getTaskIdBySession、getActiveTaskCount
+   - stopAll: 批量停止
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| startTask 注册查询 | ✅ |
+| startTask 存储 AbortController | ✅ |
+| stopTask 中止+清理 | ✅ |
+| stopTask 处理不存在 | ✅ |
+| bindSession 双向映射 | ✅ |
+| 查询方法 | ✅ 3 项 |
+| stopAll 批量停止 | ✅ |
+| 全部测试 (136) | ✅ |
+
+### 下一步
+
+Task #20: 后端 — TaskManager
