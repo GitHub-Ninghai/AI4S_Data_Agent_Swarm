@@ -4,6 +4,8 @@ import { AgentPanel } from "./components/AgentPanel";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailPanel } from "./components/DetailPanel";
 import { NotificationToast } from "./components/NotificationToast";
+import { ProjectFormModal } from "./components/modals/ProjectFormModal";
+import type { Project } from "./types";
 
 const MIN_WIDTH = 1280;
 
@@ -49,27 +51,55 @@ function StatusBar() {
 function TopBar() {
   const { projects, activeProjectId } = useAppState();
   const dispatch = useAppDispatch();
+  const [modalProject, setModalProject] = useState<Project | "create" | null>(null);
 
   return (
     <header className="top-bar">
       <h1 className="top-bar-title">Agent Swarm</h1>
-      <select
-        className="project-select"
-        value={activeProjectId ?? ""}
-        onChange={(e) =>
-          dispatch({
-            type: "SET_ACTIVE_PROJECT",
-            projectId: e.target.value || null,
-          })
-        }
-      >
-        <option value="">全部项目</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <div className="top-bar-right">
+        <select
+          className="project-select"
+          value={activeProjectId ?? ""}
+          onChange={(e) =>
+            dispatch({
+              type: "SET_ACTIVE_PROJECT",
+              projectId: e.target.value || null,
+            })
+          }
+        >
+          <option value="">全部项目</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        {activeProjectId && (
+          <button
+            className="top-bar-icon-btn"
+            onClick={() => {
+              const p = projects.find((pr) => pr.id === activeProjectId);
+              if (p) setModalProject(p);
+            }}
+            title="编辑当前项目"
+          >
+            &#x270E;
+          </button>
+        )}
+        <button
+          className="btn btn-small top-bar-add-btn"
+          onClick={() => setModalProject("create")}
+        >
+          + Project
+        </button>
+      </div>
+
+      {modalProject !== null && (
+        <ProjectFormModal
+          project={modalProject === "create" ? undefined : modalProject}
+          onClose={() => setModalProject(null)}
+        />
+      )}
     </header>
   );
 }

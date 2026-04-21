@@ -1335,11 +1335,63 @@ Task #52: 前端 — 加载骨架屏与按钮 Loading 状态
 
 ---
 
-## Task #54: 前端 — Project 管理弹窗（创建/编辑）
+## Task #55: 启动脚本 start.js（跨平台）
 
 ---
 
-## Task #53: 前端 — 错误状态处理（API 失败 Toast + WebSocket 断连状态栏）
+## Task #54: 前端 — Project 管理弹窗（创建/编辑）
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/components/modals/ProjectFormModal.tsx`** — Project 创建/编辑 Modal
+   - 双模式：传入 `project` 参数为编辑模式，不传为创建模式
+   - 表单字段：
+     - 项目名称（input，实时校验 `[a-zA-Z0-9_-]`，红色错误提示）
+     - 工作目录绝对路径（input，前端校验绝对路径格式，编辑模式禁用）
+     - 描述（textarea，可选）
+   - 前端校验与后端 `validateName` / `validatePath` 对齐
+   - 后端 400 错误时显示 `error.message`（如 "path does not exist on disk"）
+   - 创建成功后重新加载 projects 列表，关闭弹窗
+   - 提交按钮 spinning icon + 禁用状态
+
+2. **`web/src/App.tsx`** — TopBar 集成 Project 管理
+   - 右侧区域重构为 `.top-bar-right` flex 布局
+   - "+ Project" 按钮：打开创建模式 Modal
+   - 编辑按钮：选中项目后显示铅笔图标，点击打开编辑 Modal
+   - Project 下拉框、编辑按钮、新建按钮并排排列
+
+3. **`web/src/index.css`** — TopBar 右侧样式
+   - `.top-bar-right`: flex 布局 + gap
+   - `.top-bar-icon-btn`: 透明图标按钮，hover 变亮
+   - `.top-bar-add-btn`: 半透明背景的新建按钮
+
+### 修改文件
+
+| 文件 | 操作 |
+|------|------|
+| `web/src/components/modals/ProjectFormModal.tsx` | **新建** Modal 组件 |
+| `web/src/App.tsx` | TopBar 添加 Project 管理入口 |
+| `web/src/index.css` | TopBar 右侧布局样式 |
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ 无错误 |
+| Vite 生产构建 | ✅ 595ms，44 模块 |
+| 后端测试 | ✅ 240/240 通过 |
+| 名称校验 `[a-zA-Z0-9_-]` | ✅ 红色提示 |
+| 绝对路径校验 | ✅ 前端 + 后端双重 |
+| 后端错误展示 | ✅ "path does not exist" |
+| 编辑模式路径锁定 | ✅ disabled |
+| 创建成功刷新列表 | ✅ 重新 GET /api/projects |
+
+### 下一步
+
+Task #55: 启动脚本 start.js（跨平台）
 
 **日期**: 2026-04-21
 **状态**: ✅ 完成
