@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Project } from "../../types";
-import { useAppState, useAppDispatch } from "../../store/AppContext";
+import { useAppDispatch } from "../../store/AppContext";
 import * as api from "../../api/client";
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ export function ProjectFormModal({ project, onClose }: ProjectFormModalProps) {
       : api.createProject(data);
 
     promise
-      .then((res) => {
+      .then((_res) => {
         // Reload projects list
         api.getProjects().then((pr) => {
           dispatch({ type: "SET_PROJECTS", projects: pr.projects });

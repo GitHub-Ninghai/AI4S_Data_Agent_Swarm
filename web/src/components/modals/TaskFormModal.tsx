@@ -165,6 +165,26 @@ export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
   // Edit mode: only Todo tasks can change agentId
   const canChangeAgent = !isEdit || task?.status === "Todo";
 
+  // Status icon for agent dropdown
+  const STATUS_ICONS: Record<string, string> = {
+    idle: "🟢",
+    working: "🔵",
+    stuck: "🟡",
+    offline: "⚫",
+  };
+
+  // Agent status warning
+  const selectedAgent = form.agentId ? agents.get(form.agentId) : null;
+  const agentWarning = selectedAgent
+    ? selectedAgent.status === "working"
+      ? { type: "warning" as const, message: "⚠️ 该 Agent 当前正在执行任务，启动按钮将置灰直到 Agent 空闲" }
+      : selectedAgent.status === "stuck"
+        ? { type: "warning" as const, message: "⚠️ 该 Agent 当前阻塞中，启动按钮将置灰直到 Agent 恢复" }
+        : selectedAgent.status === "offline"
+          ? { type: "error" as const, message: "⚠️ 该 Agent 已停用，无法启动任务" }
+          : null
+    : null;
+
   const validateForm = useCallback(() => {
     setErrors(validate(form));
   }, [form]);
@@ -315,11 +335,16 @@ export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
                   <option value="">选择 Agent</option>
                   {enabledAgents.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.avatar} {a.name} ({a.status})
+                      {STATUS_ICONS[a.status] ?? "⚪"} {a.avatar} {a.name}
                     </option>
                   ))}
                 </select>
                 {errors.agentId && <span className="form-error">{errors.agentId}</span>}
+                {agentWarning && (
+                  <span className={`form-agent-warning ${agentWarning.type === "error" ? "form-agent-warning-error" : ""}`}>
+                    {agentWarning.message}
+                  </span>
+                )}
                 {isEdit && !canChangeAgent && (
                   <span className="form-hint">运行中的 Task 不可更改 Agent</span>
                 )}

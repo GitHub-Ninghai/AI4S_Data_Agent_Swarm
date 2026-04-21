@@ -3,8 +3,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { pipeline } from "node:stream/promises";
-import { Readable } from "node:stream";
 import * as taskStore from "../store/taskStore.js";
 import * as agentStore from "../store/agentStore.js";
 import * as projectStore from "../store/projectStore.js";

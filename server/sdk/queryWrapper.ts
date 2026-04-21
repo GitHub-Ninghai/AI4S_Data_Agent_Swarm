@@ -3,7 +3,6 @@ import type { Query, Options, PermissionResult } from "@anthropic-ai/claude-agen
 import type { Task, Agent } from "../store/types.js";
 import * as taskStore from "../store/taskStore.js";
 import * as agentStore from "../store/agentStore.js";
-import * as sessionStore from "../store/sessionStore.js";
 import { broadcast } from "../services/wsBroadcaster.js";
 
 // ---------------------------------------------------------------------------
@@ -189,7 +188,7 @@ export function resolveToolDecision(
 function waitForUserDecision(
   taskId: string,
   toolName: string,
-  toolInput: Record<string, unknown>,
+  _toolInput: Record<string, unknown>,
 ): Promise<"allow" | "deny"> {
   return new Promise<"allow" | "deny">((resolve) => {
     const timer = setTimeout(() => {

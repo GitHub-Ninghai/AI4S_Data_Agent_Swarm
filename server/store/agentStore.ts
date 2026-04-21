@@ -1,4 +1,4 @@
-import type { Agent, AgentStatus, AgentStats } from "./types.js";
+import type { Agent, AgentStatus } from "./types.js";
 import { agentsStore } from "./index.js";
 
 // ---------------------------------------------------------------------------

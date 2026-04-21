@@ -1,4 +1,4 @@
-import type { Session, SessionStatus } from "./types.js";
+import type { Session } from "./types.js";
 import { sessionsStore } from "./index.js";
 
 // ---------------------------------------------------------------------------

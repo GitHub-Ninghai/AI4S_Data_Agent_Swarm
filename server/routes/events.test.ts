@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, vi, beforeEach } from "vitest";
 import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
@@ -6,9 +6,6 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { app, server, startServer } from "../app.js";
 import * as taskStore from "../store/taskStore.js";
-import * as agentStore from "../store/agentStore.js";
-import * as projectStore from "../store/projectStore.js";
-import type { Task } from "../store/types.js";
 
 // ---------------------------------------------------------------------------
 // Mocks

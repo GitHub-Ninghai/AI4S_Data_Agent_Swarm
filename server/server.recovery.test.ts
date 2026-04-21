@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import request from "supertest";
 import os from "node:os";
 import { app, server, startServer } from "./app.js";
 import * as taskStore from "./store/taskStore.js";
 import * as agentStore from "./store/agentStore.js";
-import * as projectStore from "./store/projectStore.js";
 
 // ---------------------------------------------------------------------------
 // Mocks

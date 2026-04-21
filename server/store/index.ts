@@ -1,5 +1,5 @@
 import path from "node:path";
-import { FileStore, type FileStoreOptions } from "./fileStore.js";
+import { FileStore } from "./fileStore.js";
 
 // ---------------------------------------------------------------------------
 // Constants

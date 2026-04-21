@@ -7,11 +7,19 @@
   "scripts": {
     "start": "node start.js",
     "stop": "node stop.js",
-    "probe": "tsx scripts/sdk-probe.ts"
+    "probe": "tsx scripts/sdk-probe.ts",
+    "lint": "eslint server/ web/src/ --no-warn-ignored",
+    "lint:fix": "eslint server/ web/src/ --fix --no-warn-ignored",
+    "format": "prettier --write \"server/**/*.ts\" \"web/src/**/*.{ts,tsx,css}\""
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "eslint": "^10.2.1",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.0"
   }
 }

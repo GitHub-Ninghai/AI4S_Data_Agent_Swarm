@@ -127,7 +127,8 @@ export interface Session {
 // JSON file schema envelopes
 // ---------------------------------------------------------------------------
 
-export interface SchemaEnvelope<T> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface SchemaEnvelope<T = unknown> {
   _schema_version: number;
   [key: string]: unknown;
 }

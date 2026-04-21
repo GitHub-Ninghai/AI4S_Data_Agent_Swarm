@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadAllStores } from "./store/index.js";
 import * as taskStore from "./store/taskStore.js";
 import * as agentStore from "./store/agentStore.js";
-import { initWebSocket, getConnectedClientCount, closeWebSocket } from "./services/wsBroadcaster.js";
+import { initWebSocket, closeWebSocket } from "./services/wsBroadcaster.js";
 import { projectsRouter } from "./routes/projects.js";
 import { agentsRouter } from "./routes/agents.js";
 import { tasksRouter } from "./routes/tasks.js";
@@ -76,7 +76,9 @@ function recoverRunningTasks(): void {
 
 function checkDiskSpace(): void {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require("node:path");
     const dataDir = path.resolve(process.cwd(), "data");
     if (!fs.existsSync(dataDir)) return;

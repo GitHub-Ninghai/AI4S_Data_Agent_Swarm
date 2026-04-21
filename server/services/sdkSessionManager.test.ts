@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { sdkSessionManager } from "./sdkSessionManager.js";
 import * as taskStore from "../store/taskStore.js";
-import * as agentStore from "../store/agentStore.js";
 import * as sessionStore from "../store/sessionStore.js";
 import type { Task, Agent } from "../store/types.js";
 
@@ -42,8 +41,7 @@ vi.mock("../sdk/messageParser.js", () => ({
   extractCostInfo: vi.fn(() => undefined),
 }));
 
-import { startQuery, resumeQuery, cleanupQuery } from "../sdk/queryWrapper.js";
-import { parseMessage, extractSessionId, extractCostInfo } from "../sdk/messageParser.js";
+import { startQuery, cleanupQuery } from "../sdk/queryWrapper.js";
 
 // ---------------------------------------------------------------------------
 // Tests

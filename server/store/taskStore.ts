@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from "./types.js";
+import type { TaskStatus } from "./types.js";
 import { tasksStore } from "./index.js";
 
 // ---------------------------------------------------------------------------

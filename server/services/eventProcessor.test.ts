@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, vi, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -6,8 +6,6 @@ import zlib from "node:zlib";
 import request from "supertest";
 import { app, server, startServer } from "../app.js";
 import * as taskStore from "../store/taskStore.js";
-import * as agentStore from "../store/agentStore.js";
-import * as projectStore from "../store/projectStore.js";
 import type { Event } from "../store/types.js";
 
 // ---------------------------------------------------------------------------
@@ -240,7 +238,6 @@ describe("EventProcessor", () => {
     eventProcessor.reset();
 
     const jsonlPath = path.join(EVENTS_DIR, `${taskId}.jsonl`);
-    const gzPath = path.join(EVENTS_DIR, `${taskId}.jsonl.gz`);
 
     // Create a large JSONL file (> 100MB threshold is too big for tests,
     // so we'll test the archiveFile method directly with a smaller file)

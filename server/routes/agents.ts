@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import * as agentStore from "../store/agentStore.js";
 import * as taskStore from "../store/taskStore.js";
 import { broadcast } from "../services/wsBroadcaster.js";
-import type { Agent, AgentStats } from "../store/types.js";
+import type { Agent } from "../store/types.js";
 
 // ---------------------------------------------------------------------------
 // Constants

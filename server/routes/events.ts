@@ -56,7 +56,7 @@ eventsRouter.post("/event", (req, res) => {
   const {
     hook_event_name,
     session_id,
-    cwd,
+    cwd: _cwd,  // eslint-disable-line @typescript-eslint/no-unused-vars
     tool_name,
     tool_input,
     tool_output,

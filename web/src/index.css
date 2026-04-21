@@ -1480,6 +1480,23 @@ body {
   margin-top: 0.125rem;
 }
 
+.form-agent-warning {
+  display: block;
+  font-size: 0.75rem;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.form-agent-warning-error {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
 /* Priority radio group */
 
 .priority-group {

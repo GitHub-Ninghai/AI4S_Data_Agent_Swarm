@@ -3,7 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import * as taskStore from "../store/taskStore.js";
 import { broadcast } from "./wsBroadcaster.js";
-import type { Event, EventType } from "../store/types.js";
+import type { Event } from "../store/types.js";
 
 // ---------------------------------------------------------------------------
 // Config

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import type { Task, TaskStatus } from "../types";
-import { useAppState } from "../store/AppContext";
+import { useAppState, useAppDispatch } from "../store/AppContext";
 import { ConfirmDialog } from "./ConfirmDialog";
 import * as api from "../api/client";
 
@@ -40,6 +40,7 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onSelect, onEdit }: TaskCardProps) {
   const { agents } = useAppState();
+  const dispatch = useAppDispatch();
   const [loading, setLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<"delete" | "stop" | null>(null);
 
@@ -174,7 +175,9 @@ export function TaskCard({ task, onSelect, onEdit }: TaskCardProps) {
               loading={loading === "retry"}
               onClick={() =>
                 handleAction("retry", async () => {
-                  await api.retryTask(task.id);
+                  const res = await api.retryTask(task.id);
+                  dispatch({ type: "UPDATE_TASK", task: res.task });
+                  dispatch({ type: "SET_SELECTED_TASK", taskId: res.task.id });
                 })
               }
             />

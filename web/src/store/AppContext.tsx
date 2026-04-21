@@ -3,12 +3,12 @@ import {
   useContext,
   useReducer,
   useEffect,
-  useCallback,
+
   useMemo,
   useRef,
   type ReactNode,
 } from "react";
-import type { Agent, Task, Project, Event } from "../types";
+import type { Agent, Task, Project } from "../types";
 import * as api from "../api/client";
 import { useWebSocket, type WSHandlers } from "../hooks/useWebSocket";
 

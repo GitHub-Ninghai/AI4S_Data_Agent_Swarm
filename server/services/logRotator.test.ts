@@ -152,7 +152,7 @@ describe("logRotator", () => {
       fs.writeFileSync(filePath, "X".repeat(200));
 
       // Constructor should rotate
-      const logger = new FileLogger(filePath, { maxBytes: 100 });
+      new FileLogger(filePath, { maxBytes: 100 });
 
       expect(fs.existsSync(`${filePath}.1`)).toBe(true);
       expect(fs.existsSync(filePath)).toBe(false); // renamed away

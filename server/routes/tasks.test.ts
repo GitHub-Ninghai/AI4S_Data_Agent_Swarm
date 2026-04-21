@@ -3,8 +3,6 @@ import request from "supertest";
 import os from "node:os";
 import { app, server, startServer } from "../app.js";
 import * as taskStore from "../store/taskStore.js";
-import * as agentStore from "../store/agentStore.js";
-import * as projectStore from "../store/projectStore.js";
 
 describe("Task API", () => {
   let projectId: string;

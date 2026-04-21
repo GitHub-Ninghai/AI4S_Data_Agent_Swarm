@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useAppState, useAppDispatch } from "../store/AppContext";
+import { useAppState } from "../store/AppContext";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { BudgetBar } from "./BudgetBar";
 import { ToolApproval } from "./ToolApproval";
@@ -12,7 +12,6 @@ import type { Event, Agent, AgentStats } from "../types";
 
 export function DetailPanel() {
   const { selectedTaskId, selectedAgentId, tasks, agents } = useAppState();
-  const dispatch = useAppDispatch();
 
   // Task detail state
   const [events, setEvents] = useState<Event[]>([]);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as taskStore from "../store/taskStore.js";
 import * as agentStore from "../store/agentStore.js";
 import * as projectStore from "../store/projectStore.js";
