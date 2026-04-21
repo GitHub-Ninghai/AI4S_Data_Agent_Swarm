@@ -1120,4 +1120,44 @@ Task #42: 前端 — TaskCard 组件
 
 ### 下一步
 
-Task #42: 前端 — TaskCard 组件
+Task #44: 前端 — DetailPanel 组件
+
+---
+
+## Task #42-#43: 前端 — TaskCard + KanbanBoard 组件
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/components/TaskCard.tsx`** — Task 卡片组件
+   - 左边缘颜色编码: Todo 灰 / Running 蓝 / Done 绿 / Stuck 橙 / Cancelled 红
+   - 显示: 状态 badge、相对时间、标题(2行截断)、Agent 头像+名称
+   - 操作按钮矩阵: Todo(启动/删除) / Running(停止/完成) / Stuck(停止) / Done+Cancelled(重试/删除)
+   - 按钮 loading 状态防重复提交
+   - 卡片最大高度 180px
+
+2. **`web/src/components/KanbanBoard.tsx`** — 看板面板
+   - 四列布局: Todo / Running / Stuck / Done(Cancelled合并)
+   - 按 activeProjectId 过滤任务
+   - 每列按 priority 降序 + createdAt 降序排列
+   - "+ Task" 按钮创建任务(Agent/Project 下拉选择)
+   - 空状态显示
+
+3. **`web/src/App.tsx`** — 中栏集成 KanbanBoard
+
+4. **`web/src/index.css`** — TaskCard + KanbanBoard 样式
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ |
+| Vite 生产构建 | ✅ 535ms |
+| TaskCard 操作按钮矩阵 | ✅ |
+| KanbanBoard 四列布局 | ✅ |
+
+### 下一步
+
+Task #44: 前端 — DetailPanel 组件

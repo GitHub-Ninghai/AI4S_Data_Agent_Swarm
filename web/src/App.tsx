@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppProvider, useAppState, useAppDispatch } from "./store/AppContext";
 import { AgentPanel } from "./components/AgentPanel";
+import { KanbanBoard } from "./components/KanbanBoard";
 
 const MIN_WIDTH = 1280;
 
@@ -106,7 +107,7 @@ function MainLayout() {
           <span>Tasks</span>
         </div>
         <div className="panel-body">
-          <p className="panel-placeholder">Kanban 看板</p>
+          <KanbanBoard />
         </div>
       </div>
 
