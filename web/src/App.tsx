@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppProvider, useAppState, useAppDispatch } from "./store/AppContext";
+import { AgentPanel } from "./components/AgentPanel";
 
 const MIN_WIDTH = 1280;
 
@@ -95,7 +96,7 @@ function MainLayout() {
         </div>
         {!leftCollapsed && (
           <div className="panel-body">
-            <p className="panel-placeholder">Agent 列表</p>
+            <AgentPanel />
           </div>
         )}
       </div>

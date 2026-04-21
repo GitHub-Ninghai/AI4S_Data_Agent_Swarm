@@ -1079,4 +1079,45 @@ Task #40: 前端 — AgentCard 组件
 
 ### 下一步
 
-Task #40: 前端 — AgentCard 组件
+Task #42: 前端 — TaskCard 组件
+
+---
+
+## Task #40-#41: 前端 — AgentCard + AgentPanel 组件
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/components/AgentCard.tsx`** — Agent 卡片组件
+   - 左边缘 4px 状态色条: idle=#9CA3AF, working=#3B82F6, stuck=#F59E0B, offline=#6B7280
+   - 状态动画: idle 呼吸灯, working 蓝色脉冲, stuck 橙色闪烁, offline 无动画
+   - 显示: avatar(大号emoji), name, 状态文字标签, taskCount, lastEventAt 相对时间
+   - 点击触发 onSelect，isSelected 时高亮背景
+
+2. **`web/src/components/AgentPanel.tsx`** — Agent 列表面板
+   - 从全局状态获取 agents Map，按状态排序(stuck > working > idle > offline)
+   - 空状态: 图标 + 提示文字 + 创建按钮
+   - "+ Agent" 按钮展开创建表单(name/role/prompt)
+   - 调用 API 创建 Agent，更新全局状态
+
+3. **`web/src/index.css`** — AgentCard + AgentPanel + 表单样式
+   - 动画 keyframes: pulse-bar, blink-bar, breathe-bar
+   - 按钮系统: btn-primary, btn-secondary, btn-small
+   - 表单样式: form-label, form-input, form-textarea
+
+4. **`web/src/App.tsx`** — 左栏集成 AgentPanel
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ |
+| Vite 生产构建 | ✅ 516ms |
+| AgentCard 状态色条+动画 | ✅ |
+| AgentPanel 排序+创建 | ✅ |
+
+### 下一步
+
+Task #42: 前端 — TaskCard 组件
