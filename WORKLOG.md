@@ -1331,4 +1331,56 @@ Task #51: 前端 — 通知系统（NotificationToast）
 
 ### 下一步
 
-Task #51: 前端 — 通知系统（NotificationToast）
+Task #52: 前端 — 加载骨架屏与按钮 Loading 状态
+
+---
+
+## Task #51: 前端 — 通知系统（NotificationToast）
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/src/components/NotificationToast.tsx`** — Toast 通知队列组件
+   - 固定右上角（position: fixed, top/right, z-index: 2000）
+   - 5 种通知类型及样式：
+     - `success`（绿色，3s 自动消失）— 操作成功
+     - `info`（蓝色，3s 自动消失）— 连接恢复等
+     - `warning`（橙色，5s 自动消失）— 警告
+     - `error`（红色，5s 自动消失或手动关闭）— 操作失败
+     - `stuck`（橙色，不自动消失）— Stuck 警告，带"查看"按钮
+   - 队列上限 3 条：超出时替换最旧的非 Stuck 通知，Stuck 通知始终保留
+   - 每条通知有关闭按钮（×），Stuck 通知"查看"按钮点击后切换 selectedTaskId
+   - 滑入动画（translateX 100%→0）
+
+2. **`web/src/store/AppContext.tsx`** 更新
+   - Notification 接口扩展：新增 `taskId?: string` 和 `"success"` 类型
+   - ADD_NOTIFICATION reducer 实现队列管理：超过 3 条时优先移除最旧的非 Stuck 通知
+   - onToolApproval handler：携带 taskId 和 toolName，支持"查看"跳转
+
+3. **`web/src/App.tsx`** 集成 NotificationToast
+
+4. **`web/src/index.css`** 新增样式
+   - `.toast-container` 固定容器
+   - `.toast` 通知卡片 + 边框颜色 + 阴影
+   - `@keyframes toast-in` 滑入动画
+   - `.toast-action` 查看 按钮
+   - `.toast-close` 关闭按钮
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 | ✅ 无错误 |
+| Vite 生产构建 | ✅ 590ms，43 模块 |
+| 通知类型样式 | ✅ 5 种颜色 |
+| Stuck 通知不消失 | ✅ null duration |
+| 自动消失计时 | ✅ success 3s / error 5s |
+| 队列上限 3 条 | ✅ 优先保留 Stuck |
+| "查看"按钮跳转 | ✅ dispatch SET_SELECTED_TASK |
+| 关闭按钮 | ✅ DISMISS_NOTIFICATION |
+
+### 下一步
+
+Task #52: 前端 — 加载骨架屏与按钮 Loading 状态

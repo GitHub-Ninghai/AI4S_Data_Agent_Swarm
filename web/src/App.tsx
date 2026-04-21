@@ -3,6 +3,7 @@ import { AppProvider, useAppState, useAppDispatch } from "./store/AppContext";
 import { AgentPanel } from "./components/AgentPanel";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailPanel } from "./components/DetailPanel";
+import { NotificationToast } from "./components/NotificationToast";
 
 const MIN_WIDTH = 1280;
 
@@ -165,6 +166,7 @@ function AppInner() {
       <TopBar />
       <MainLayout />
       <StatusBar />
+      <NotificationToast />
     </div>
   );
 }

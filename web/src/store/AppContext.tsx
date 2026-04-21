@@ -17,9 +17,10 @@ import { useWebSocket, type WSHandlers } from "../hooks/useWebSocket";
 
 export interface Notification {
   id: string;
-  type: "info" | "warning" | "error" | "stuck";
+  type: "info" | "warning" | "error" | "stuck" | "success";
   message: string;
   timestamp: number;
+  taskId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,11 +125,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "SET_SELECTED_AGENT":
       return { ...state, selectedAgentId: action.agentId };
 
-    case "ADD_NOTIFICATION":
-      return {
-        ...state,
-        notifications: [...state.notifications, action.notification],
-      };
+    case "ADD_NOTIFICATION": {
+      const MAX_NOTIFICATIONS = 3;
+      const incoming = action.notification;
+      let current = [...state.notifications, incoming];
+
+      // Enforce max 3: remove oldest non-stuck notifications
+      if (current.length > MAX_NOTIFICATIONS) {
+        const stuck = current.filter((n) => n.type === "stuck");
+        const nonStuck = current.filter((n) => n.type !== "stuck");
+        const excess = current.length - MAX_NOTIFICATIONS;
+        nonStuck.splice(0, excess);
+        current = [...nonStuck, ...stuck];
+      }
+
+      return { ...state, notifications: current };
+    }
 
     case "DISMISS_NOTIFICATION":
       return {
@@ -229,13 +241,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Events are loaded on demand via getTaskEvents
       },
       onToolApproval: (data) => {
+        const d = data as { taskId?: string; toolName?: string };
         dispatch({
           type: "ADD_NOTIFICATION",
           notification: {
             id: crypto.randomUUID(),
             type: "stuck",
-            message: `工具审批请求: ${JSON.stringify(data)}`,
+            message: d.toolName
+              ? `工具审批请求: ${d.toolName}`
+              : "工具审批请求",
             timestamp: Date.now(),
+            taskId: d.taskId,
           },
         });
       },
