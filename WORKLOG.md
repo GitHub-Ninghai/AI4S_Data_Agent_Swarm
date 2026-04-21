@@ -2151,3 +2151,56 @@ Task #97: 前端 — Agent 状态警告
 ### 下一步
 
 全部开发任务完成。项目可交付使用。
+
+---
+
+## 修复: 服务端 TypeScript 类型错误
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 问题描述
+
+`tsc --noEmit` 编译发现 5 处 TypeScript 类型错误，不影响 `tsx` 运行时，但会阻止生产构建（`tsc` 编译到 `dist/`）。
+
+### 修复内容
+
+1. **`server/routes/events.ts:45`** — `Spread types may only be created from object types`
+   - `rawData` 类型为 `unknown`，不能直接 spread
+   - 修复: 添加类型守卫，`rawData` 为 object 时才 spread
+
+2. **`server/sdk/queryWrapper.ts:154`** — `Type 'string' is not assignable to type 'Record<string, unknown>'`
+   - `ToolApprovalRequest.toolInput` 类型为 `Record<string, unknown>`，但 `summarizeToolInput()` 返回 `string`
+   - 修复: 将接口字段类型改为 `string`（实际用法就是摘要字符串）
+   - 补充: `ToolApprovalRequest` 接口添加缺失的 `timestamp` 字段
+
+3. **`server/store/taskStore.ts`** — `Cannot find name 'Task'`（13 处）
+   - 缺少 `Task` 类型导入
+   - 修复: `import type { Task, TaskStatus } from "./types.js"`
+
+4. **`server/store/types.ts`** — `lastEventAt` 不存在于 `Task` 类型
+   - `sdkSessionManager.ts:192` 使用了 `taskStore.updateTask(taskId, { lastEventAt: ... })`，但 `Task` 接口没有该字段
+   - 修复: 在 `Task` 接口中添加 `lastEventAt?: number`
+
+### 修改文件
+
+| 文件 | 修改 |
+|------|------|
+| `server/routes/events.ts` | 类型守卫保护 spread 操作 |
+| `server/sdk/queryWrapper.ts` | `ToolApprovalRequest.toolInput` 类型改为 `string`，添加 `timestamp` 字段 |
+| `server/store/taskStore.ts` | 添加 `Task` 类型导入 |
+| `server/store/types.ts` | `Task` 接口添加 `lastEventAt?: number` |
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| `tsc --noEmit` (server) | ✅ 0 错误 |
+| `tsc --noEmit` (web) | ✅ 0 错误 |
+| 后端测试 (249) | ✅ 全部通过 |
+| 前端测试 (23) | ✅ 全部通过 |
+| ESLint | ✅ 0 错误, 56 警告 |
+
+### 下一步
+
+项目可正常进行 `tsc` 编译，生产构建已无障碍。

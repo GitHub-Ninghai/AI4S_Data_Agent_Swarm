@@ -42,7 +42,8 @@ function appendToHookLog(rawData: unknown): void {
     fs.mkdirSync(LOGS_DIR, { recursive: true });
   }
   const logPath = path.join(LOGS_DIR, "hooks.log");
-  const line = JSON.stringify({ ...rawData, _receivedAt: Date.now() }) + "\n";
+  const record = (typeof rawData === "object" && rawData !== null) ? rawData as Record<string, unknown> : {};
+  const line = JSON.stringify({ ...record, _receivedAt: Date.now() }) + "\n";
   fs.appendFileSync(logPath, line, "utf-8");
 }
 

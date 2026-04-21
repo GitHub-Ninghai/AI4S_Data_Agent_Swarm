@@ -13,8 +13,9 @@ export interface ToolApprovalRequest {
   taskId: string;
   sessionId: string;
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: string;
   toolUseId: string;
+  timestamp: number;
 }
 
 export interface StartQueryResult {

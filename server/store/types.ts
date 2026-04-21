@@ -77,6 +77,7 @@ export interface Task {
   startedAt?: number;
   completedAt?: number;
   stuckReason?: string;
+  lastEventAt?: number;
 }
 
 // ---- Event -----------------------------------------------------------------
