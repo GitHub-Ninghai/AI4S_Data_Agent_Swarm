@@ -413,6 +413,66 @@ describe("TaskManager", () => {
   });
 
   // -------------------------------------------------------------------------
+  // stuckTask
+  // -------------------------------------------------------------------------
+
+  describe("stuckTask", () => {
+    it("should transition Running → Stuck", () => {
+      const agent = makeAgent({ status: "working", currentTaskId: "task-1" });
+      const task = makeTask({ status: "Running", startedAt: Date.now() });
+
+      agentStore.createAgent(agent);
+      taskStore.createTask(task);
+
+      taskManager.stuckTask(task.id, "需要工具审批");
+
+      const updatedTask = taskStore.getTaskById(task.id);
+      expect(updatedTask?.status).toBe("Stuck");
+      expect(updatedTask?.stuckReason).toBe("需要工具审批");
+
+      const updatedAgent = agentStore.getAgentById(agent.id);
+      expect(updatedAgent?.status).toBe("stuck");
+    });
+
+    it("should do nothing for Todo task", () => {
+      const task = makeTask({ status: "Todo" });
+      taskStore.createTask(task);
+
+      taskManager.stuckTask(task.id, "reason");
+
+      const unchanged = taskStore.getTaskById(task.id);
+      expect(unchanged?.status).toBe("Todo");
+    });
+
+    it("should do nothing for non-existent task", () => {
+      expect(() => taskManager.stuckTask("nonexistent", "reason")).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // cancelTask — Stuck variant
+  // -------------------------------------------------------------------------
+
+  describe("cancelTask — Stuck", () => {
+    it("should transition Stuck → Cancelled", () => {
+      const agent = makeAgent({ status: "stuck", currentTaskId: "task-1" });
+      const task = makeTask({ status: "Stuck", startedAt: Date.now() - 5000 });
+
+      agentStore.createAgent(agent);
+      taskStore.createTask(task);
+
+      taskManager.cancelTask(task.id);
+
+      const updatedTask = taskStore.getTaskById(task.id);
+      expect(updatedTask?.status).toBe("Cancelled");
+      expect(updatedTask?.completedReason).toBe("user_cancelled");
+
+      const updatedAgent = agentStore.getAgentById(agent.id);
+      expect(updatedAgent?.status).toBe("idle");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Agent status management
   // -------------------------------------------------------------------------
 

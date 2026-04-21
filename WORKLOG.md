@@ -1815,4 +1815,51 @@ Task #60: 后端 — JSONL 事件归档（超过 100MB 压缩为 .jsonl.gz）
 
 ### 下一步
 
-Task #61-#67: 补充测试与集成验证
+Task #61-#64: 测试任务（已在前序开发中完成）
+
+---
+
+## Task #61-#64: 单元测试 + 集成测试（已在开发任务中覆盖）
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+**Task #61: taskManager 状态机测试** — `server/services/taskManager.test.ts` (26 tests)
+- startTask: Todo→Running, 非Todo拒绝, Agent禁用, Agent忙碌(含任务标题), 并发上限, SDK失败回滚
+- stuckTask: Running→Stuck, Todo忽略, 不存在任务
+- cancelTask: Running→Cancelled, Stuck→Cancelled, Agent统计, 不存在, 非活跃状态
+- doneTask: Running→Done, Agent统计, Todo拒绝
+- completeTask: sdk_result, 不存在跳过, Todo跳过, output截断
+- Agent状态管理: 多Task保持working, 全部完成→idle
+
+**Task #62: isAutoAllowed 与 isPermissionPrompt 测试**
+- `sdk/queryWrapper.test.ts` (22 tests): Read/Glob/Grep自动批准, 安全/危险Bash, Write/Edit/未知工具拒绝
+- `services/stuckDetector.test.ts` (13 tests): 5个权限关键词检测, 大小写不敏感, 非权限事件跳过
+
+**Task #63: safeWrite 与文件锁测试** — `store/fileStore.test.ts` (13 tests)
+- safeWrite: 写入/覆写/无tmp残留/并发安全
+- loadJson: 缺失/已存在/空文件
+- migrate: 版本匹配/有序迁移/持久化
+- FileStore: 默认加载/save+getData/50并发串行化
+
+**Task #64: REST API 集成测试** — Supertest 全端点
+- `routes/agents.test.ts` (19 tests): CRUD + 统计 + 状态联动
+- `routes/tasks.test.ts` (23 tests): CRUD + 过滤/分页 + 软删除
+- `routes/taskActions.test.ts` (27 tests): start/stop/done/message/approve-tool/retry
+- `routes/projects.test.ts` (12 tests): CRUD + 删除保护
+- `routes/events.test.ts` (9 tests): Hook事件端点
+- `routes/taskEvents.test.ts` (14 tests): JSONL事件查询 + GZ归档
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| 全部测试文件 | ✅ 19 files |
+| 全部测试用例 | ✅ 249 tests |
+| 测试覆盖范围 | ✅ 后端核心逻辑全覆盖 |
+
+### 下一步
+
+Task #68: 文档 — README.md
