@@ -899,4 +899,53 @@ Task #34: 后端 — 日志策略与日志轮转
 
 ### 下一步
 
-Task #35: 前端 — Vite + React + TypeScript 项目初始化
+Task #36: 前端 — REST API 客户端 — 基础封装与 Agent/Project API
+
+---
+
+## Task #35: 前端 — Vite + React + TypeScript 项目初始化
+
+**日期**: 2026-04-21
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **`web/index.html`** — 添加 CSP meta 标签
+   - `default-src 'self'`
+   - `connect-src`: 允许 localhost:3456 和 localhost:5173 的 HTTP/WebSocket
+   - `style-src 'self' 'unsafe-inline'`; `script-src 'self' 'unsafe-inline'`
+
+2. **`web/src/main.tsx`** — 入口文件重构
+   - 导入 `App` 组件（从独立文件）
+   - 导入全局 CSS reset（`index.css`）
+
+3. **`web/src/App.tsx`** — 根组件
+   - 最小屏幕宽度检测：`window.innerWidth < 1280` 时显示提示
+   - 监听 `resize` 事件动态响应
+   - 基础布局结构：header + main
+
+4. **`web/src/index.css`** — CSS Reset + 全局样式
+   - 完整 box-sizing reset
+   - 全局字体栈（系统字体）
+   - `.screen-warning` 样式
+   - `.app-header` 深色背景 + `.app-main` 弹性布局
+
+5. **已有配置验证**
+   - `vite.config.ts` proxy 配置已就绪（`/api` → :3456, `/ws` → ws://:3456）
+   - `web/tsconfig.json` ES2022 + strict + react-jsx 已配置
+   - `web/package.json` React 19 + Vite 6 + TypeScript 5.7 已配置
+
+6. **清理**：删除 `components/.gitkeep`、`hooks/.gitkeep`、`api/.gitkeep` 占位文件
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 类型检查 (`tsc --noEmit`) | ✅ 无错误 |
+| Vite 生产构建 (`vite build`) | ✅ 512ms，输出 3 个文件 |
+| CSP meta 标签 | ✅ connect-src 包含 localhost |
+| 屏幕宽度检测 | ✅ < 1280px 显示提示 |
+
+### 下一步
+
+Task #36: 前端 — REST API 客户端 — 基础封装与 Agent/Project API
