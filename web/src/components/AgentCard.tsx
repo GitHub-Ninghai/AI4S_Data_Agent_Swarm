@@ -71,7 +71,7 @@ export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProp
             }}
             title="编辑"
           >
-            \u270E
+            ✎
           </button>
         </div>
 

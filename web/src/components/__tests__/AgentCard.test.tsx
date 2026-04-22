@@ -96,4 +96,13 @@ describe("AgentCard", () => {
     // Task count displayed as part of the card info
     expect(screen.getByText(/5/)).toBeInTheDocument();
   });
+
+  it("renders the edit icon instead of a unicode escape literal", () => {
+    const agent = makeAgent();
+    render(<AgentCard agent={agent} onSelect={vi.fn()} onEdit={vi.fn()} isSelected={false} />);
+
+    const editButton = screen.getByTitle("编辑");
+    expect(editButton).toHaveTextContent("✎");
+    expect(editButton).not.toHaveTextContent("\\u270E");
+  });
 });

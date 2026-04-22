@@ -151,8 +151,13 @@ export function useWebSocket(handlers: WSHandlers): UseWebSocketReturn {
         reconnectTimerRef.current = null;
       }
       if (wsRef.current) {
-        wsRef.current.onclose = null; // prevent reconnect on unmount
-        wsRef.current.close();
+        const ws = wsRef.current;
+        ws.onclose = null; // prevent reconnect on unmount
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.onopen = () => ws.close();
+        } else {
+          ws.close();
+        }
         wsRef.current = null;
       }
     };
