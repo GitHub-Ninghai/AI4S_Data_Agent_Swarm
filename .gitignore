@@ -8,6 +8,7 @@ dist/
 .claude/
 *.tmp
 *.tmp.*
+*.tsbuildinfo
 nul
 
 # IDE
@@ -17,3 +18,8 @@ nul
 # OS
 .DS_Store
 Thumbs.db
+.omx/
+bun.lock
+.codex
+.plan
+.agents/

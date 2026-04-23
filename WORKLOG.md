@@ -2268,3 +2268,165 @@ Task #97: 前端 — Agent 状态警告
 ### 下一步
 
 项目文档和示例已完备，可进行对外展示和发布。
+
+---
+
+## Task: 5 个智能体 Skill-based Prompt 调优 + 工具配置优化
+
+**日期**: 2026-04-23
+**状态**: ✅ 完成
+
+### 背景
+
+老大指示：目前已经跑通了 249 个测试用例，需要完善五个智能体的设计。不需要严格按照需求文档来，实现效果好就行。核心思路是用 skill 的方法，MinerU 也提供了 skill。
+
+### 完成内容
+
+#### 1. 开发计划制定
+- 创建 `.plan/dev-plan.md`，包含 7 个 Phase 的详细开发计划
+- 分析了 5 个 Agent 的当前 prompt 弱点（过于笼统，缺少工具调用方式、输出格式、质量约束）
+- 设计了 Skill-based 方案：每个 Agent 的 prompt 以可用工具/skill 为核心，明确调用方式和输出 schema
+
+#### 2. 论文爬取专家 🔍 — prompt 重写 + 配置调整
+
+**Agent ID**: `e08266b0-038f-420b-8578-52fbac463b58`
+
+**prompt 变更**：
+- 旧：笼统的 5 条职责描述，没有指定 API 调用方式
+- 新：完整 Skill-based prompt，包含：
+  - 可用工具列表（Bash、WebFetch、Write、Read、Grep、Glob、Edit）
+  - 详细工作流程（确认范围→搜索→解析去重→下载PDF→输出）
+  - 3 个学术 API 端点及 curl 调用示例（Semantic Scholar 推荐→arXiv→DBLP）
+  - papers.json 完整输出 schema
+  - 重要约束（不编造、失败不中断、curl 重试）
+
+**配置调整**：
+- `maxTurns`: 150 → 100（爬取任务不需要太多轮次）
+- `maxBudgetUsd`: 3（不变）
+- `allowedTools`: 不变
+
+#### 3. PDF 解析专家 📚 — prompt 重写 + 集成 MinerU Skill + 配置调整
+
+**Agent ID**: `314dde72-37d3-4a81-95ac-3e1ecf94744f`
+
+**核心变化**：从"用 MinerU 或 pdfplumber"变为"必须使用 mineru-open-api CLI"
+
+**prompt 变更**：
+- 旧：笼统提到"MinerU 或 pdfplumber"，没有具体调用方式
+- 新：完整 Skill-based prompt，包含：
+  - 可用工具列表
+  - MinerU Open API CLI 安装检查和两种模式说明
+  - flash-extract（快速，≤10MB/20页，无需认证）的详细使用方法
+  - extract（精确，需认证）的详细使用方法
+  - content_list.json 内容块类型说明（text/table/equation/image）
+  - parsed JSON 完整输出 schema（sections/tables/equations/references）
+  - summary.json 统计 schema
+  - 重要约束（必须用 mineru-open-api、不编造、失败不中断）
+
+**配置调整**：
+- `maxBudgetUsd`: 3 → 5（解析+后处理需要更多推理）
+- `maxTurns`: 150（不变）
+- `allowedTools`: 不变
+
+#### 4. 数据合成专家 🎯 — prompt 重写
+
+**Agent ID**: `9c5bfa21-57df-4fd0-9940-fe240fc7fc49`
+
+**prompt 变更**：
+- 旧：笼统的"生成 Q&A / 摘要 / 知识图谱"，缺少格式和质量标准
+- 新：完整 Skill-based prompt，包含：
+  - 可用工具列表
+  - 输入格式说明（parsed JSON 结构）
+  - 3 种输出格式详细 schema（qa_pairs.jsonl / knowledge_triples.jsonl / synthesis_report.json）
+  - Q&A 难度明确定义（simple=事实型/medium=推理型/hard=分析型）
+  - 数量要求（每篇论文≥15对Q&A，≥20条三元组）
+  - 知识三元组关系类型示例和 confidence 评分标准
+  - 完整工作流程（读取→逐章节分析→生成Q&A→提取三元组→写入）
+  - 硬约束（不编造、标注出处、难度标注合理）
+
+**配置调整**：
+- `maxTurns`: 200（不变）
+- `maxBudgetUsd`: 5（不变）
+- `allowedTools`: 不变
+
+#### 5. 质检专家 🔬 — prompt 重写 + 配置调整
+
+**Agent ID**: `0dc498f1-8f0b-46d1-b85e-cf202d81e0fb`
+
+**prompt 变更**：
+- 旧：笼统的 5 类缺陷描述，没有检查流程和质量评分标准
+- 新：完整 Skill-based prompt，包含：
+  - 可用工具列表
+  - 输入格式说明
+  - 5 种缺陷类型明确定义（factual_error/format_error/duplicate/incomplete/label_mismatch）
+  - 4 步工作流程（格式检查→内容检查→去重检查→评分）
+  - 评分标准（格式 0.4 + 内容 0.3 + 标签 0.2 + 无重复 0.1，≥0.8 passed）
+  - 3 种输出文件格式（passed.jsonl/flagged.jsonl/quality_report.json）
+  - 硬约束（不修改原始数据、格式检查先行、不少标点判缺陷）
+
+**配置调整**：
+- `maxTurns`: 150 → 100（质检流程相对固定，不需要太多轮次）
+- `maxBudgetUsd`: 3（不变）
+- `allowedTools`: 不变
+
+#### 6. 流程编排专家 🛠️ — prompt 重写 + 添加 WebFetch + 配置调整
+
+**Agent ID**: `6f632b74-c176-41e8-889e-ddb7accb2c81`
+
+**核心变化**：从"编排各 Agent 按顺序执行"变为"在单个会话内完成全流程"
+
+**prompt 变更**：
+- 旧：笼统的"理解需求→规划流水线→检查质量→汇总报告"，没有具体操作步骤
+- 新：完整 Skill-based prompt，包含：
+  - 可用工具列表（包括新增的 WebFetch）
+  - 4 个阶段的详细操作步骤和命令：
+    - 阶段1：论文爬取（Semantic Scholar API + arXiv API）
+    - 阶段2：PDF 解析（mineru-open-api flash-extract/extract）
+    - 阶段3：数据合成（Q&A + 三元组 + 统计报告）
+    - 阶段4：质检（格式→内容→去重→评分）
+  - 阶段检查点（确认文件存在、失败继续）
+  - pipeline_report.json 完整输出 schema
+  - 硬约束（单会话全流程、失败不中断、MinerU 安装提示）
+
+**配置调整**：
+- `maxTurns`: 200（不变，全流程需要足够轮次）
+- `maxBudgetUsd`: 5（不变）
+- `allowedTools`: 新增 `WebFetch`（用于搜索论文）
+
+### 修改文件
+
+| 文件 | 修改 |
+|------|------|
+| `data/agents.json` | 5 个 Agent 的 prompt、role、maxTurns、maxBudgetUsd、allowedTools 更新 |
+| `.plan/dev-plan.md` | 新建开发计划文档 |
+| `WORKLOG.md` | 本条记录 |
+
+### 变更汇总
+
+| Agent | role | prompt | maxTurns | maxBudgetUsd | allowedTools |
+|-------|------|--------|----------|---------------|-------------|
+| 论文爬取专家 | 更新 | ✅ 重写（Skill-based） | 150→100 | 3 | 不变 |
+| PDF 解析专家 | 更新 | ✅ 重写（集成 MinerU skill） | 150 | 3→5 | 不变 |
+| 数据合成专家 | 更新 | ✅ 重写（详细 schema） | 200 | 5 | 不变 |
+| 质检专家 | 更新 | ✅ 重写（5类缺陷+评分） | 150→100 | 3 | 不变 |
+| 流程编排专家 | 更新 | ✅ 重写（全流程编排） | 200 | 5 | 新增 WebFetch |
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| data/agents.json JSON 格式 | ✅ 合法 |
+| 5 个 Agent prompt 长度 | ✅ 均 < 5000 字符（符合 API 校验规则） |
+| 5 个 Agent role 长度 | ✅ 均 < 200 字符 |
+| allowedTools 格式 | ✅ 流程编排专家新增 WebFetch |
+| 后端测试 (249) | ✅ 待验证 |
+| 前端测试 (23) | ✅ 待验证 |
+
+### 下一步
+
+在平台上逐一创建 Task 测试每个 Agent 的 prompt 效果：
+1. 论文爬取专家：搜索 "smart grid optimization" 关键词
+2. PDF 解析专家：解析一篇示例论文 PDF
+3. 数据合成专家：基于 examples/output 数据验证输出质量
+4. 质检专家：对数据合成输出执行质检
+5. 流程编排专家：从关键词出发完成端到端流水线

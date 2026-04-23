@@ -24,10 +24,21 @@ export interface UseWebSocketReturn {
 // Constants
 // ---------------------------------------------------------------------------
 
-const WS_URL =
-  typeof window !== "undefined"
-    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:3456/ws`
-    : "ws://localhost:3456/ws";
+function resolveWebSocketUrl(): string {
+  const envUrl = import.meta.env.VITE_WS_URL;
+  if (typeof envUrl === "string" && envUrl.trim().length > 0) {
+    return envUrl;
+  }
+
+  if (typeof window === "undefined") {
+    return "ws://localhost:3456/ws";
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
+
+const WS_URL = resolveWebSocketUrl();
 
 const INITIAL_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;

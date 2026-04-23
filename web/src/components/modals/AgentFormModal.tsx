@@ -221,7 +221,7 @@ export function AgentFormModal({ agent, onClose }: AgentFormModalProps) {
         <div className="modal-header">
           <h2 className="modal-title">{isEdit ? "编辑 Agent" : "创建 Agent"}</h2>
           <button className="modal-close" onClick={onClose}>
-            \u00D7
+            {"\u00D7"}
           </button>
         </div>
 
