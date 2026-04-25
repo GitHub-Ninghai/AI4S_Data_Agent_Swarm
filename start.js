@@ -11,12 +11,13 @@
  *   node start.js --prod   # production (requires tsc + vite build first)
  */
 
-import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
+import { execSync, spawn } from "node:child_process";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { platform } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectName = basename(__dirname);
 const isWin = platform() === "win32";
 const isDev = !process.argv.includes("--prod");
 
@@ -30,6 +31,131 @@ const children = [];
 function log(tag, msg) {
   const ts = new Date().toLocaleTimeString();
   console.log(`[${ts}] [${tag}] ${msg}`);
+}
+
+function findPidsOnPort(port) {
+  try {
+    if (isWin) {
+      const output = execSync(
+        `netstat -ano | findstr :${port} | findstr LISTENING`,
+        { encoding: "utf-8", windowsHide: true },
+      );
+      const pids = new Set();
+      for (const line of output.trim().split("\n")) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parseInt(parts[parts.length - 1], 10);
+        if (pid > 0) pids.add(pid);
+      }
+      return [...pids];
+    }
+
+    const output = execSync(`lsof -i :${port} -t -sTCP:LISTEN 2>/dev/null`, {
+      encoding: "utf-8",
+    });
+    return output
+      .trim()
+      .split("\n")
+      .map((value) => parseInt(value, 10))
+      .filter((value) => value > 0);
+  } catch {
+    return [];
+  }
+}
+
+function getProcessInfo(pid, port) {
+  try {
+    if (isWin) {
+      const output = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
+        encoding: "utf-8",
+        windowsHide: true,
+      }).trim();
+      const [command = ""] = output.replace(/^"|"$/g, "").split('","');
+      return { pid, command };
+    }
+
+    const output = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN`, {
+      encoding: "utf-8",
+    })
+      .trim()
+      .split("\n")
+      .slice(1);
+    const line = output.find((entry) => {
+      const parts = entry.trim().split(/\s+/);
+      return parseInt(parts[1] || "", 10) === pid;
+    });
+
+    if (!line) return { pid, command: "" };
+
+    const parts = line.trim().split(/\s+/);
+    return { pid, command: parts[0] || "" };
+  } catch {
+    return { pid, command: "" };
+  }
+}
+
+function isProjectProcess(command) {
+  if (!command) return false;
+
+  return (
+    command.includes(projectName) ||
+    command.includes("node") ||
+    command.includes("bun") ||
+    command.includes("vite")
+  );
+}
+
+function terminatePid(pid) {
+  try {
+    if (isWin) {
+      execSync(`taskkill /F /T /PID ${pid}`, {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    }
+
+    process.kill(pid, "SIGTERM");
+  } catch {
+    // Process may already be dead
+  }
+}
+
+function ensurePortAvailable(name, port) {
+  const pids = findPidsOnPort(port);
+  if (pids.length === 0) return true;
+
+  const processes = pids.map((pid) => getProcessInfo(pid, port));
+  const projectPids = processes.filter((proc) => isProjectProcess(proc.command));
+  const foreignPids = processes.filter((proc) => !isProjectProcess(proc.command));
+
+  if (projectPids.length > 0) {
+    for (const proc of projectPids) {
+      log(
+        "Launcher",
+        `Port ${port} occupied by existing ${name} process (PID ${proc.pid}); stopping it before restart.`,
+      );
+      terminatePid(proc.pid);
+    }
+
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (findPidsOnPort(port).length === 0) return true;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+
+  if (foreignPids.length > 0) {
+    for (const proc of foreignPids) {
+      const detail = proc.command ? `: ${proc.command}` : "";
+      log(
+        "Launcher",
+        `Port ${port} is occupied by PID ${proc.pid}${detail}`,
+      );
+    }
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -72,6 +198,11 @@ function addProc(tag, command, args, opts = {}) {
   proc.on("exit", (code, signal) => {
     const reason = signal ? `signal ${signal}` : `code ${code}`;
     log(tag, `Process exited (${reason})`);
+
+    if (code && code !== 0) {
+      killAll();
+      process.exit(code);
+    }
   });
 
   proc.on("error", (err) => {
@@ -128,6 +259,20 @@ async function main() {
   console.log(`║       mode: ${isDev ? "development  " : "production   "}            ║`);
   console.log("╚══════════════════════════════════════╝");
   console.log();
+
+  const requiredPorts = [{ name: "server", port: 3456 }];
+  if (isDev) {
+    requiredPorts.push({ name: "web", port: 5173 });
+  }
+
+  for (const { name, port } of requiredPorts) {
+    const available = ensurePortAvailable(name, port);
+    if (!available) {
+      throw new Error(
+        `Port ${port} is already in use by another application. Free the port or change the service port before restarting.`,
+      );
+    }
+  }
 
   // ---- Backend Server ----
   if (isDev) {
