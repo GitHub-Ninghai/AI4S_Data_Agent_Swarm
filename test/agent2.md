@@ -20,5 +20,24 @@ Please input your API key: ********************
 Auth successful!
 # 学术论文（复杂排版）配置 Token（前往 https://mineru.net/apiManage/token 创建）
 > mineru-open-api extract document.pdf --model vlm -o ./output/
-
 ```
+### 3. 添加task
+![alt text](images/image-7.png)
+![alt text](images/image-8.png)
+
+```plaintext
+标题：test_agent2-pdf解析专家
+描述：使用minerU解析pdf论文。
+Agent：论文解析专家
+project：test
+```
+### 4. 结果
+```plaintext
+{"command":"mineru-open-api flash-extract papers/2310.19550.pdf -o ./parsed_papers/ --language en","description":"Parse 2310.19550.pdf with flash-extract","timeout":120000}
+```
+强制使用 flash-extract 模式解析论文，生成 JSON 文件。
+![alt text](images/image-10.png)
+
+### 5. 修复结果
+![alt text](images/image-11.png)
+![alt text](images/image-12.png)
