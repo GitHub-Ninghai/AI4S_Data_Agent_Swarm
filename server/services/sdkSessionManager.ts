@@ -4,6 +4,7 @@ import * as taskStore from "../store/taskStore.js";
 import * as agentStore from "../store/agentStore.js";
 import * as sessionStore from "../store/sessionStore.js";
 import { broadcast } from "../services/wsBroadcaster.js";
+import { eventProcessor } from "./eventProcessor.js";
 import {
   startQuery,
   resumeQuery,
@@ -174,7 +175,6 @@ class SDKSessionManager {
     const task = taskStore.getTaskById(taskId);
     if (!task) return;
 
-    const eventCount = task.eventCount + events.length;
     const turnCount = task.turnCount + events.filter(
       (e: Event) => e.eventType === "SDKAssistant" && e.toolName,
     ).length;
@@ -186,15 +186,14 @@ class SDKSessionManager {
       : task.budgetUsed;
 
     taskStore.updateTask(taskId, {
-      eventCount,
       turnCount,
       budgetUsed,
       lastEventAt: Date.now(),
     });
 
-    // Broadcast each event
+    // Persist and broadcast each event through the shared event pipeline.
     for (const event of events) {
-      broadcast("event:new", event);
+      eventProcessor.processEvent(event);
     }
 
     // Handle result message — task completion

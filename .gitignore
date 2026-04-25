@@ -23,3 +23,7 @@ bun.lock
 .codex
 .plan
 .agents/
+skills-lock.json
+.envrc
+examples/*
+out/

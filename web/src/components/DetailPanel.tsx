@@ -26,6 +26,26 @@ export function DetailPanel() {
       ? agents.get(selectedTask.agentId)
       : undefined;
 
+  const loadTaskEvents = useCallback(
+    async (taskId: string, withLoading: boolean) => {
+      if (withLoading) {
+        setEventsLoading(true);
+      }
+
+      try {
+        const res = await api.getTaskEvents(taskId, { limit: 50 });
+        setEvents(res.events ?? res.items ?? []);
+      } catch {
+        setEvents([]);
+      } finally {
+        if (withLoading) {
+          setEventsLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
   // Load task events
   useEffect(() => {
     if (!selectedTaskId) {
@@ -34,25 +54,25 @@ export function DetailPanel() {
       return;
     }
 
-    let cancelled = false;
-    setEventsLoading(true);
-    api
-      .getTaskEvents(selectedTaskId, { limit: 50 })
-      .then((res) => {
-        if (cancelled) return;
-        setEvents(res.events ?? res.items ?? []);
-        setEventsLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setEvents([]);
-        setEventsLoading(false);
-      });
+    void loadTaskEvents(selectedTaskId, true);
+  }, [selectedTaskId, loadTaskEvents]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTaskId]);
+  // Poll events while the selected task is active so the timeline updates in place.
+  useEffect(() => {
+    if (
+      !selectedTaskId ||
+      !selectedTask ||
+      (selectedTask.status !== "Running" && selectedTask.status !== "Stuck")
+    ) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void loadTaskEvents(selectedTaskId, false);
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [selectedTaskId, selectedTask, loadTaskEvents]);
 
   // Load agent stats
   useEffect(() => {
@@ -81,22 +101,6 @@ export function DetailPanel() {
       cancelled = true;
     };
   }, [selectedAgentId]);
-
-  // Listen for new events via WebSocket (append to events list)
-  const handleEventNew = useCallback(
-    (data: unknown) => {
-      const evt = data as Event;
-      if (evt?.taskId === selectedTaskId) {
-        setEvents((prev) => [...prev, evt]);
-      }
-    },
-    [selectedTaskId],
-  );
-
-  // Register event listener via dispatch (simplified approach)
-  useEffect(() => {
-    // This is handled by the global WebSocket handler in AppContext
-  }, [handleEventNew]);
 
   // Empty state
   if (!selectedTask && !selectedAgent) {
