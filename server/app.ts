@@ -13,6 +13,7 @@ import { projectsRouter } from "./routes/projects.js";
 import { agentsRouter } from "./routes/agents.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { eventsRouter } from "./routes/events.js";
+import { copilotRouter } from "./routes/copilot.js";
 import { sdkSessionManager } from "./services/sdkSessionManager.js";
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/api/projects", projectsRouter);
 app.use("/api/agents", agentsRouter);
 app.use("/api/tasks", tasksRouter);
+app.use("/api/copilot", copilotRouter);
 app.use("/", eventsRouter);
 
 // ---------------------------------------------------------------------------

@@ -196,3 +196,33 @@ export interface UpdateTaskData {
   priority?: 0 | 1 | 2;
   tags?: string[];
 }
+
+// ---- Copilot ---------------------------------------------------------------
+
+export type CopilotActionType =
+  | "create_agent"
+  | "create_task"
+  | "create_pipeline"
+  | "update_agent"
+  | "update_task"
+  | "query_status";
+
+export interface CopilotAction {
+  type: CopilotActionType;
+  summary: string;
+  params: Record<string, unknown>;
+  confirmationRequired: boolean;
+}
+
+export interface CopilotChatResponse {
+  sessionId: string;
+  message: string;
+  actions: CopilotAction[];
+  needsConfirmation: boolean;
+}
+
+export interface CopilotConfirmResponse {
+  success: boolean;
+  message: string;
+  data?: Record<string, unknown>;
+}

@@ -1,23 +1,21 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAppState } from "../store/AppContext";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { BudgetBar } from "./BudgetBar";
 import { ToolApproval } from "./ToolApproval";
+import { CopilotPanel } from "./CopilotPanel";
 import * as api from "../api/client";
 import type { Event, Agent, AgentStats } from "../types";
 
 // ---------------------------------------------------------------------------
-// DetailPanel
+// DetailPanel — with tab navigation: Task / Agent / Copilot
 // ---------------------------------------------------------------------------
+
+type DetailTab = "copilot" | "task" | "agent";
 
 export function DetailPanel() {
   const { selectedTaskId, selectedAgentId, tasks, agents } = useAppState();
-
-  // Task detail state
-  const [events, setEvents] = useState<Event[]>([]);
-  const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<DetailTab>("copilot");
 
   const selectedTask = selectedTaskId ? tasks.get(selectedTaskId) : undefined;
   const selectedAgent = selectedAgentId
@@ -25,6 +23,70 @@ export function DetailPanel() {
     : selectedTask
       ? agents.get(selectedTask.agentId)
       : undefined;
+
+  // Auto-switch tab when selection changes
+  useEffect(() => {
+    if (selectedTask) {
+      setActiveTab("task");
+    } else if (selectedAgent) {
+      setActiveTab("agent");
+    }
+  }, [selectedTask, selectedAgent]);
+
+  const availableTabs = useMemo(() => {
+    const tabs: Array<{ key: DetailTab; label: string; show: boolean }> = [
+      { key: "copilot", label: "Copilot", show: true },
+      { key: "task", label: "Task", show: !!selectedTask },
+      { key: "agent", label: "Agent", show: !!selectedAgent },
+    ];
+    return tabs.filter((t) => t.show);
+  }, [selectedTask, selectedAgent]);
+
+  return (
+    <div className="detail-panel-wrapper">
+      {/* Tab bar */}
+      <div className="detail-tabs">
+        {availableTabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={`detail-tab ${activeTab === tab.key ? "detail-tab-active" : ""}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === "copilot" && <CopilotPanel />}
+      {activeTab === "task" && selectedTask && (
+        <TaskDetailView
+          selectedTask={selectedTask}
+          selectedAgent={selectedAgent}
+        />
+      )}
+      {activeTab === "agent" && selectedAgent && (
+        <AgentDetailView
+          selectedAgent={selectedAgent}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TaskDetailView (wraps original task detail logic)
+// ---------------------------------------------------------------------------
+
+function TaskDetailView({
+  selectedTask,
+  selectedAgent,
+}: {
+  selectedTask: import("../types").Task;
+  selectedAgent?: Agent;
+}) {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   const loadTaskEvents = useCallback(
     async (taskId: string, withLoading: boolean) => {
@@ -46,46 +108,45 @@ export function DetailPanel() {
     [],
   );
 
-  // Load task events
   useEffect(() => {
-    if (!selectedTaskId) {
-      setEvents([]);
-      setEventsLoading(false);
-      return;
-    }
+    void loadTaskEvents(selectedTask.id, true);
+  }, [selectedTask.id, loadTaskEvents]);
 
-    void loadTaskEvents(selectedTaskId, true);
-  }, [selectedTaskId, loadTaskEvents]);
-
-  // Poll events while the selected task is active so the timeline updates in place.
   useEffect(() => {
-    if (
-      !selectedTaskId ||
-      !selectedTask ||
-      (selectedTask.status !== "Running" && selectedTask.status !== "Stuck")
-    ) {
+    if (selectedTask.status !== "Running" && selectedTask.status !== "Stuck") {
       return;
     }
 
     const timer = setInterval(() => {
-      void loadTaskEvents(selectedTaskId, false);
+      void loadTaskEvents(selectedTask.id, false);
     }, 1500);
 
     return () => clearInterval(timer);
-  }, [selectedTaskId, selectedTask, loadTaskEvents]);
+  }, [selectedTask.id, selectedTask.status, loadTaskEvents]);
 
-  // Load agent stats
+  return (
+    <TaskDetail
+      task={selectedTask}
+      agent={selectedAgent}
+      events={events}
+      eventsLoading={eventsLoading}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AgentDetailView (wraps original agent detail logic)
+// ---------------------------------------------------------------------------
+
+function AgentDetailView({ selectedAgent }: { selectedAgent: Agent }) {
+  const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
   useEffect(() => {
-    if (!selectedAgentId) {
-      setAgentStats(null);
-      setStatsLoading(false);
-      return;
-    }
-
     let cancelled = false;
     setStatsLoading(true);
     api
-      .getAgentStats(selectedAgentId)
+      .getAgentStats(selectedAgent.id)
       .then((res) => {
         if (cancelled) return;
         setAgentStats(res.stats);
@@ -100,36 +161,15 @@ export function DetailPanel() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId]);
+  }, [selectedAgent.id]);
 
-  // Empty state
-  if (!selectedTask && !selectedAgent) {
-    return (
-      <div className="detail-empty">
-        <span className="detail-empty-icon">{"\u{1F446}"}</span>
-        <p>点击任务卡片或 Agent 卡片查看详情</p>
-      </div>
-    );
-  }
-
-  // Agent detail view
-  if (selectedAgent && !selectedTask) {
-    return <AgentDetail agent={selectedAgent} stats={agentStats} statsLoading={statsLoading} />;
-  }
-
-  // Task detail view
-  if (selectedTask) {
-    return (
-      <TaskDetail
-        task={selectedTask}
-        agent={selectedAgent}
-        events={events}
-        eventsLoading={eventsLoading}
-      />
-    );
-  }
-
-  return null;
+  return (
+    <AgentDetail
+      agent={selectedAgent}
+      stats={agentStats}
+      statsLoading={statsLoading}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,8 @@ import type {
   Event,
   HealthStatus,
   PaginatedResponse,
+  CopilotChatResponse,
+  CopilotConfirmResponse,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -268,4 +270,34 @@ export function getTaskSdkStatus(
   taskId: string,
 ): Promise<{ running: boolean; turnCount: number; budgetUsed: number; maxBudgetUsd: number }> {
   return request("GET", `/api/tasks/${taskId}/sdk-status`);
+}
+
+// ---------------------------------------------------------------------------
+// Copilot API
+// ---------------------------------------------------------------------------
+
+export function sendCopilotMessage(
+  params: { sessionId?: string; message: string },
+): Promise<CopilotChatResponse> {
+  return request("POST", "/api/copilot/chat", params);
+}
+
+export function confirmCopilotAction(
+  sessionId: string,
+  actionIndex: number,
+  confirmed: boolean,
+): Promise<CopilotConfirmResponse> {
+  return request("POST", "/api/copilot/confirm", {
+    sessionId,
+    actionIndex,
+    confirmed,
+  });
+}
+
+export function createCopilotSession(): Promise<{ sessionId: string }> {
+  return request("POST", "/api/copilot/session");
+}
+
+export function deleteCopilotSession(sessionId: string): Promise<{ ok: boolean }> {
+  return request("DELETE", `/api/copilot/session/${sessionId}`);
 }
