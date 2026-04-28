@@ -14,6 +14,8 @@ import type {
   PaginatedResponse,
   CopilotChatResponse,
   CopilotConfirmResponse,
+  UploadedFile,
+  CreateDataPipelineParams,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -300,4 +302,73 @@ export function createCopilotSession(): Promise<{ sessionId: string }> {
 
 export function deleteCopilotSession(sessionId: string): Promise<{ ok: boolean }> {
   return request("DELETE", `/api/copilot/session/${sessionId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Files API
+// ---------------------------------------------------------------------------
+
+export async function uploadFiles(
+  projectId: string,
+  files: File[],
+): Promise<{ files: UploadedFile[] }> {
+  const formData = new FormData();
+  formData.append("projectId", projectId);
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const res = await fetch("/api/files/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let code = "UNKNOWN";
+    let message = res.statusText;
+    try {
+      const err = await res.json();
+      if (err.error) {
+        code = err.error.code ?? code;
+        message = err.error.message ?? message;
+      }
+    } catch {
+      // use defaults
+    }
+    const err = new ApiError(code, message, res.status);
+    globalErrorHandler?.(err);
+    throw err;
+  }
+
+  return res.json() as Promise<{ files: UploadedFile[] }>;
+}
+
+export function getProjectFiles(
+  projectId: string,
+): Promise<{ files: UploadedFile[] }> {
+  return request("GET", `/api/files/${projectId}`);
+}
+
+export function deleteProjectFile(
+  projectId: string,
+  fileId: string,
+): Promise<{ ok: boolean }> {
+  return request("DELETE", `/api/files/${projectId}/${fileId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline API
+// ---------------------------------------------------------------------------
+
+export function createDataPipeline(
+  params: CreateDataPipelineParams,
+): Promise<{
+  pipeline: {
+    type: string;
+    projectId: string;
+    pdfFiles: string[];
+    tasks: Task[];
+  };
+}> {
+  return request("POST", "/api/pipeline/create", params);
 }

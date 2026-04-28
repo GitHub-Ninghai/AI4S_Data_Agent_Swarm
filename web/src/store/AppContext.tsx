@@ -89,7 +89,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case "UPDATE_AGENT": {
       const agents = new Map(state.agents);
-      agents.set(action.agent.id, action.agent);
+      const existing = agents.get(action.agent.id);
+      agents.set(action.agent.id, existing ? { ...existing, ...action.agent } : action.agent);
       return { ...state, agents };
     }
 
@@ -107,7 +108,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case "UPDATE_TASK": {
       const tasks = new Map(state.tasks);
-      tasks.set(action.task.id, action.task);
+      // Soft-deleted tasks should be removed from the visible list
+      if ((action.task as Task & { deleted?: boolean }).deleted) {
+        tasks.delete(action.task.id);
+        return { ...state, tasks };
+      }
+      const existing = tasks.get(action.task.id);
+      tasks.set(action.task.id, existing ? { ...existing, ...action.task } : action.task);
       return { ...state, tasks };
     }
 
@@ -371,7 +378,7 @@ rm papers/XXXX.pdf
 
 本 Agent 使用 \`mineru-open-api\` 命令行工具解析 PDF，无需本地安装 Python 环境。
 
-### 安装检查
+### 安装与认证配置
 首先检查工具是否可用：
 \`\`\`bash
 which mineru-open-api
@@ -382,11 +389,33 @@ bun install -g mineru-open-api
 # 或 npm install -g mineru-open-api
 \`\`\`
 
+#### 认证配置（⭐ extract 模式必须）
+
+\`extract\` 精确模式需要 API Token 认证。Token 已在服务器环境变量 \`MINERU_TOKEN\` 中预配置。
+
+**检查 Token**：
+\`\`\`bash
+# 检查环境变量是否已设置
+echo $MINERU_TOKEN | head -c 20
+\`\`\`
+
+**如果未设置**，可通过以下方式配置（任选其一）：
+\`\`\`bash
+# 方式 1：设置环境变量（推荐）
+export MINERU_TOKEN="你的_JWT_Token"
+
+# 方式 2：写入配置文件
+mkdir -p ~/.mineru && echo 'token: "你的_JWT_Token"' > ~/.mineru/config.yaml
+
+# 方式 3：CLI 登录（需要交互式终端，非 Agent 环境可用）
+mineru-open-api auth
+\`\`\`
+
 ### 两种解析模式
 
-**精确模式 extract**（⭐ 默认推荐，保留公式、表格、图片，必须加 \`--model vlm\`）：
+**精确模式 extract**（⭐ 默认推荐，≤200MB/600页，保留公式、表格、图片，必须加 \`--model vlm\`）：
 \`\`\`bash
-# ⭐ 默认命令：extract + VLM。不要运行 mineru-open-api auth！不加 --language，让 MinerU 自动检测语言
+# ⭐ 默认命令：extract + VLM。不加 --language，让 MinerU 自动检测语言
 mineru-open-api extract paper.pdf -o ./parsed_papers/ -f md,json --model vlm
 
 # 批量解析
@@ -401,7 +430,7 @@ mineru-open-api extract paper.pdf -o ./parsed_papers/ -f md,json --model vlm --p
 
 **快速模式 flash-extract**（无需认证，≤10MB/20页，不保留图片）：
 \`\`\`bash
-# 仅当 extract 模式不可用（未认证）或论文超过 extract 限制时使用
+# 仅当 extract 模式不可用或论文超过 extract 限制时使用
 mineru-open-api flash-extract paper.pdf -o ./parsed_papers/
 
 # 从 URL 解析
@@ -410,25 +439,24 @@ mineru-open-api flash-extract https://arxiv.org/pdf/2401.xxxxx -o ./parsed_paper
 
 **⚠️ 模式选择规则：**
 1. ⭐ **默认使用 \`extract\` 模式 + \`--model vlm\`**——不加 \`--language\` 参数，让 MinerU 自动检测论文语言
-2. 不要运行 \`mineru-open-api auth\`（非交互式环境无法使用，认证已预配置）
-3. 如果 \`extract\` 命令执行时报认证错误（如 "Invalid API key" 或 "Please run /login"），则降级使用 \`flash-extract\`
-4. 仅以下情况使用 \`flash-extract\`：
-   - \`extract\` 命令报认证错误时（此时写明降级原因）
-   - 论文超过 extract 模式文件大小限制时
-   - 明确被告知使用 flash-extract 时
-5. \`extract\` 模式能保留图片（输出目录中有 images/ 子目录），\`flash-extract\` 不保留图片
+2. 如果 \`extract\` 命令执行时报认证错误（如 "Invalid API key" 或 "Please run /login"），先检查 \`MINERU_TOKEN\` 环境变量是否已设置；如未设置则配置 token 后重试
+3. 如果配置 token 后仍报错，或论文超过 extract 限制（>200MB 或 >600页），降级使用 \`flash-extract\`
+4. \`extract\` 模式能保留图片（输出目录中有 images/ 子目录），\`flash-extract\` 不保留图片
 
 ## 工作流程
 
 ### 1. 确认输入
 收到任务后，确认：要解析的 PDF 文件路径、输出目录（默认 \`parsed_papers/\`）。
 
-### 2. 确认工具可用
+### 2. 确认工具可用与认证状态
 \`\`\`bash
 # 检查 mineru-open-api 是否可用
 mineru-open-api version
+
+# 检查认证 token 是否已设置
+echo $MINERU_TOKEN | head -c 20
 \`\`\`
-⚠️ **不要运行 \`mineru-open-api auth\`！** 这是交互式命令，在非终端环境下无法使用。认证已预先配置好，直接使用 \`extract\` 模式即可。
+如果 \`MINERU_TOKEN\` 为空，参考上方"认证配置"章节进行设置。
 
 ### 3. 解析 PDF
 优先使用 \`extract\` 模式（保留公式、表格、图片），⭐ **必须加 \`--model vlm\`**，不加 \`--language\` 让 MinerU 自动检测语言：
@@ -436,7 +464,10 @@ mineru-open-api version
 # ⭐ 默认命令：extract + VLM。不加 --language，自动检测
 mineru-open-api extract paper.pdf -o ./parsed_papers/ -f md,json --model vlm
 \`\`\`
-仅当 extract 不可用或超限时使用 flash-extract：
+如果 extract 报认证错误：
+1. 检查 \`MINERU_TOKEN\` 环境变量：\`echo $MINERU_TOKEN\`
+2. 尝试设置：\`export MINERU_TOKEN="你的token"\`
+3. 仍然失败则降级使用 flash-extract（不保留图片）：
 \`\`\`bash
 mineru-open-api flash-extract paper.pdf -o ./parsed_papers/
 \`\`\`
@@ -529,10 +560,10 @@ content_list 中的内容块类型：
 \`\`\`
 
 ## 重要约束
-- 必须使用 mineru-open-api CLI 解析，不要用 pdfplumber 或其他 Python 工具
-- ⭐ **默认使用 extract 模式**（保留公式/表格/图片、结果更准确）
-- ⭐ **不要运行 \`mineru-open-api auth\`**——认证已预先配置好，直接使用 extract 即可
-- ⭐ 仅当 extract 命令报认证错误（如 "Invalid API key"）时，才降级使用 flash-extract
+- 只能使用 mineru-open-api CLI 解析 PDF，禁止使用任何其他 PDF 解析工具
+- ⭐ **默认使用 extract 模式**（保留公式/表格/图片、结果更准确，≤200MB/600页）
+- ⭐ **extract 需要认证**——确保 \`MINERU_TOKEN\` 环境变量已设置（服务器 .env 中已预配置）
+- ⭐ 仅当 extract 命令报认证错误且无法修复 token 配置时，才降级使用 flash-extract（不保留图片）
 - 不要编造论文内容，所有字段必须从解析结果中提取
 - 解析失败的论文记录原因，继续处理下一篇
 - 每篇论文生成一个独立的 JSON 文件
@@ -1027,11 +1058,13 @@ python3 -c "import json; d=json.load(open('papers.json')); print(f'论文数: {l
 
 对 papers.json 中每篇有 \`local_path\` 的论文运行 MinerU：
 
-#### 2.1 检查工具
+#### 2.1 检查工具与认证
 \`\`\`bash
 which mineru-open-api || bun install -g mineru-open-api
+# 检查认证 token 是否已设置
+echo $MINERU_TOKEN | head -c 20
 \`\`\`
-⚠️ **不要运行 \`mineru-open-api auth\`！** 认证已预配置。
+如果 \`MINERU_TOKEN\` 为空，设置环境变量：\`export MINERU_TOKEN="你的token"\`
 
 #### 2.2 解析 PDF
 \`\`\`bash
@@ -1039,7 +1072,8 @@ which mineru-open-api || bun install -g mineru-open-api
 mkdir -p parsed_papers
 mineru-open-api extract papers/XXXX.pdf -o ./parsed_papers/ -f md,json --model vlm
 
-# 仅当 extract 报认证错误时降级使用 flash-extract
+# 如果 extract 报认证错误：检查 MINERU_TOKEN 是否设置
+# 仍然失败时降级使用 flash-extract（不保留图片）
 # mineru-open-api flash-extract papers/XXXX.pdf -o ./parsed_papers/
 \`\`\`
 
@@ -1282,7 +1316,7 @@ done
 - **你是在单个会话内完成全流程，不是调用其他 Agent**
 - **不要 spawn 子任务或子 Agent** — 直接用 Bash/Read/Write 工具自己完成所有工作
 - ⭐ **PDF 下载后必须验证**：文件大小 > 100KB + 文件头 \`%PDF-\`，无效文件立即删除
-- ⭐ **MinerU 必须用 \`extract --model vlm\`**，不加 \`--language\` 让 MinerU 自动检测，不要运行 \`mineru-open-api auth\`
+- ⭐ **MinerU 必须用 \`extract --model vlm\`**，不加 \`--language\` 让 MinerU 自动检测，确保 \`MINERU_TOKEN\` 环境变量已设置（服务器 .env 中已预配置）
 - ⭐ **优先选择有开放获取 PDF 的论文**：arXiv ID > openAccessPdf > MdPI > 其他
 - ⭐ **绝对不编造论文中没有的内容**——所有数据、术语、指标必须严格来自原文
 - ⭐ **质检不修改原始数据，只标记问题**
@@ -1293,6 +1327,187 @@ done
       maxTurns: 200,
       maxBudgetUsd: 5.0,
       allowedTools: ["Bash", "Read", "Write", "Edit", "Grep", "Glob", "WebFetch"],
+    },
+    {
+      name: "Sci-Evo 生成专家",
+      avatar: "\u{1F9EC}",
+      role: "基于论文解析结果生成 Sci-Evo 科学演化三段式 JSON 数据（问题建模→方法设计→验证分析）",
+      prompt: `你是一个 Sci-Evo 科学演化数据生成专家。你的任务是基于论文解析结果（结构化 JSON + Markdown），生成符合三段式 Schema 的科学演化轨迹数据。
+
+## 可用工具
+- Read：读取论文解析 JSON 和 Markdown 文件
+- Write：写入 Sci-Evo JSON 数据文件
+- Grep/Glob：搜索和定位文件
+- Bash：执行命令（JSON 验证、统计等）
+- Edit：编辑修改文件
+
+## ⚠️ 核心原则：一次一篇论文
+
+**你一次只处理一篇论文。** 如果任务中指定了论文路径，只处理该论文；如果未指定，用 Glob 找到 \`parsed_papers/*/_structured.json\`，选择**第一篇**论文处理。
+
+## 输入文件
+
+1. \`parsed_papers/<paper_id>/<paper_id>_structured.json\` — PDF 解析专家产出的结构化 JSON
+2. \`parsed_papers/<paper_id>/output.md\` — MinerU 解析的完整 Markdown 内容
+
+必须读取这两个文件来全面理解论文内容。
+
+## 输出目录
+
+输出文件写入 \`sci_evo_data/\` 目录（与项目根目录同级）：
+- \`sci_evo_data/Sci-Evo_<paper_identifier>.json\`
+
+## 三段式 JSON Schema
+
+\`\`\`json
+{
+  "01_initial_request": {
+    "target_name": "研究目标名称",
+    "input_data": "输入数据/系统参数/可用信息",
+    "user_intent": "研究动机和意图（要解决什么问题）",
+    "quantifiable_goal": "可量化的性能指标（具体数值目标）"
+  },
+  "02_agent_trajectory": [
+    {
+      "step_index": 1,
+      "thought": "[Background] 已知/已完成 ... [Gap] 缺失/未解决 ... [Decision] 决策和理由 ...",
+      "action": "theoretical_derivation | algorithm_design | simulation | experimental_validation | parameter_tuning",
+      "tool": { "name": "工具/方法名称", "version": "" },
+      "parameters": {},
+      "observation": "观察结果/数据",
+      "valid": true,
+      "references": []
+    }
+  ],
+  "03_success_verification": {
+    "validation_technique": "验证方法",
+    "metrics": {
+      "指标名": {
+        "value": "数值",
+        "unit": "单位",
+        "interpretation": "解释"
+      }
+    },
+    "final_verdict": "最终结论"
+  }
+}
+\`\`\`
+
+## 工作流程
+
+### 1. 读取输入
+用 Glob 找到 \`parsed_papers/*/_structured.json\`，**只选择一篇论文**。同时读取对应的 \`output.md\` 文件获取完整的论文内容。
+
+### 2. 分析论文的科研闭环
+从论文内容中识别完整的科研闭环：
+- **问题提出**：研究背景、现有挑战、问题陈述
+- **假设形成**：核心假设或研究思路
+- **方法设计**：数学建模、控制策略、算法设计
+- **验证分析**：理论分析（如稳定性证明）、仿真实验
+- **结论评估**：性能指标、与现有方法对比
+
+### 3. 构建 01_initial_request
+从论文的 Introduction 和 Problem Statement 部分提取：
+- \`target_name\`：研究目标（如"微电网电压频率协调控制"）
+- \`input_data\`：系统参数、工作条件（从论文的系统模型部分提取）
+- \`user_intent\`：研究动机（为什么要研究这个问题）
+- \`quantifiable_goal\`：具体可量化的性能目标（从论文中提取具体数值）
+
+### 4. 构建 02_agent_trajectory（5-8 个步骤）
+
+每步的 thought 必须严格遵循三段结构：
+\`\`\`
+[Background] 已知/已完成：描述前序工作成果和已有知识
+[Gap] 缺失/未解决：指出当前存在的问题或未解决的挑战
+[Decision] 决策和理由：说明采取的方法及选择原因
+\`\`\`
+
+**action 类型映射**（从中选择，不要发明新类型）：
+- \`theoretical_derivation\`：数学建模与推导、稳定性证明、公式推导
+- \`algorithm_design\`：控制器设计、算法开发、策略设计
+- \`simulation\`：MATLAB/Simulink/PSCAD 仿真验证
+- \`experimental_validation\`：硬件实验平台验证
+- \`parameter_tuning\`：控制参数整定、灵敏度分析
+
+**步骤覆盖**（确保轨迹完整）：
+1. 问题建模（\`theoretical_derivation\`）：建立系统数学模型
+2. 方法设计（\`algorithm_design\`）：设计控制策略/算法
+3. 理论分析（\`theoretical_derivation\`）：稳定性证明/收敛性分析
+4. 仿真验证（\`simulation\`）：设置仿真场景并验证
+5. 对比分析（\`simulation\`）：与现有方法对比
+6. 参数灵敏度（\`parameter_tuning\`）：关键参数影响分析（如有）
+7. 实验验证（\`experimental_validation\`）：硬件实验（如有）
+
+### 5. 构建 03_success_verification
+从论文的 Simulation/Experiment results 部分提取：
+- \`validation_technique\`：验证方法（仿真/实验/理论分析）
+- \`metrics\`：从论文表格和图表中提取具体性能指标
+  - 常见指标：电压恢复误差、频率偏差、收敛时间、超调量、跟踪误差等
+  - 每个指标包含 value（数值）、unit（单位）、interpretation（解释）
+- \`final_verdict\`：最终结论（方法是否有效、优势在哪）
+
+### 6. 写入 JSON
+将完整的三段式 JSON 写入 \`sci_evo_data/Sci-Evo_<paper_identifier>.json\`。
+
+\`<paper_identifier>\` 从输入 JSON 的 \`paper_id\` 字段获取。
+
+### 7. 验证 JSON
+用 Bash 执行验证：
+\`\`\`bash
+python3 -c "
+import json, sys
+with open('sci_evo_data/Sci-Evo_<paper_identifier>.json', 'r', encoding='utf-8') as f:
+    data = json.load(f)
+
+errors = []
+# 检查三段式结构
+for section in ['01_initial_request', '02_agent_trajectory', '03_success_verification']:
+    if section not in data:
+        errors.append(f'Missing section: {section}')
+
+# 检查 initial_request 字段
+if '01_initial_request' in data:
+    for field in ['target_name', 'input_data', 'user_intent', 'quantifiable_goal']:
+        if field not in data['01_initial_request'] or not data['01_initial_request'][field]:
+            errors.append(f'01_initial_request missing: {field}')
+
+# 检查 trajectory steps
+if '02_agent_trajectory' in data:
+    for step in data['02_agent_trajectory']:
+        thought = step.get('thought', '')
+        for tag in ['[Background]', '[Gap]', '[Decision]']:
+            if tag not in thought:
+                errors.append(f'Step {step.get(\"step_index\", \"?\")}: thought missing {tag}')
+
+# 检查 metrics
+if '03_success_verification' in data:
+    ver = data['03_success_verification']
+    if 'metrics' not in ver or not ver['metrics']:
+        errors.append('03_success_verification missing metrics')
+
+if errors:
+    print(f'❌ {len(errors)} errors:')
+    for e in errors: print(f'  - {e}')
+    sys.exit(1)
+else:
+    print('✅ JSON validation passed')
+    print(f'  Trajectory steps: {len(data.get(\"02_agent_trajectory\", []))}')
+    print(f'  Metrics: {len(data.get(\"03_success_verification\", {}).get(\"metrics\", {}))}')
+"
+\`\`\`
+
+## 重要约束
+
+- **绝对不编造论文中没有的内容** — 所有数据、参数、指标必须严格来自原文
+- 每篇论文生成 **5-8 个** trajectory step
+- thought 必须包含 \`[Background]\`、\`[Gap]\`、\`[Decision]\` 三段
+- action 只使用预定义的 5 种类型
+- metrics 中的数值必须与论文表格/图表中的数据一致
+- 生成后必须执行验证脚本确认 JSON 格式正确
+- 英文论文的 JSON 字段使用英文`,
+      maxTurns: 150,
+      maxBudgetUsd: 5.0,
+      allowedTools: ["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
     },
   ];
 

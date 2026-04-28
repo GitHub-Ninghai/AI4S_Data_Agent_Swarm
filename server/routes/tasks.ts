@@ -224,7 +224,7 @@ tasksRouter.get("/:id/sdk-status", async (req, res) => {
 
 // POST /api/tasks — create
 tasksRouter.post("/", (req, res) => {
-  const { title, description, agentId, projectId, priority, tags, maxTurns, maxBudgetUsd } = req.body;
+  const { title, description, agentId, projectId, priority, tags, maxTurns, maxBudgetUsd, pipelineType, inputFiles } = req.body;
 
   // Validate required fields
   const titleError = validateString(title, "title", 1, 100);
@@ -284,6 +284,8 @@ tasksRouter.post("/", (req, res) => {
     budgetUsed: 0,
     maxTurns: maxTurns ?? agent.maxTurns ?? 200,
     maxBudgetUsd: maxBudgetUsd ?? agent.maxBudgetUsd ?? 5.0,
+    pipelineType: pipelineType ?? undefined,
+    inputFiles: Array.isArray(inputFiles) ? inputFiles : undefined,
     createdAt: now,
   };
 

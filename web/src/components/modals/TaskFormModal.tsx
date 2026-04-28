@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import type { Task, CreateTaskData, UpdateTaskData } from "../../types";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { Task, CreateTaskData, UpdateTaskData, Agent } from "../../types";
 import { useAppState, useAppDispatch } from "../../store/AppContext";
 import * as api from "../../api/client";
 
@@ -47,7 +47,105 @@ interface FormErrors {
 
 interface TaskFormModalProps {
   task?: Task;
+  defaultAgentId?: string;
   onClose: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Agent-based task presets
+// ---------------------------------------------------------------------------
+
+const AGENT_PRESETS: Record<string, { title: string; description: string }> = {
+  "论文爬取专家": {
+    title: "论文爬取 — 【替换为搜索关键词】",
+    description: `## 搜索范围
+- 关键词：【替换为具体关键词，如 "microgrid voltage control"】
+- 目标论文数量：5-10 篇
+- 输出目录：papers/
+
+## 工作要求
+1. 优先使用 Semantic Scholar API 搜索
+2. 优先选择有 arXiv ID 或开放获取 PDF 的论文
+3. PDF 下载后验证文件大小 > 100KB 且文件头为 %PDF-
+4. 输出 papers.json 清单`,
+  },
+  "PDF 解析专家": {
+    title: "PDF 解析 — 【替换为论文标识】",
+    description: `## 解析范围
+- 输入目录：papers/
+- 输出目录：parsed_papers/
+- 解析模式：extract + VLM（保留公式、表格、图片）
+
+## 工作要求
+1. 使用 mineru-open-api extract --model vlm 解析
+2. 生成结构化 JSON（标题、摘要、章节、公式、表格、图片、参考文献）
+3. 每篇论文生成独立的 _structured.json
+4. 输出 summary.json 统计解析结果`,
+  },
+  "数据合成专家": {
+    title: "数据合成 — 【替换为论文标识】",
+    description: `## 合成范围
+- 输入目录：parsed_papers/
+- 输出目录：parsed_papers/（与输入同目录）
+
+## 工作要求
+1. 读取 _structured.json，一次处理一篇论文
+2. 生成 Q&A 问答对（至少 15 对：simple 5 + medium 5 + hard 5）
+3. 生成知识三元组（至少 20 条）
+4. 生成章节摘要（summaries.json）
+5. 输出 synthesis_report.json 统计报告`,
+  },
+  "质检专家": {
+    title: "数据质检 — 【替换为论文标识】",
+    description: `## 质检范围
+- 输入目录：parsed_papers/
+
+## 工作要求
+1. 格式检查：JSON 合法性、必填字段、difficulty 值范围
+2. 内容检查：对照 _structured.json 验证事实准确性
+3. 去重检查：问题语义相似度 > 80% 标记为重复
+4. 输出 passed.jsonl、flagged.jsonl、quality_report.json
+5. 质检不修改原始数据，只标记问题`,
+  },
+  "流程编排专家": {
+    title: "完整流水线 — 【替换为搜索关键词】",
+    description: `## 流水线配置
+- 搜索关键词：【替换为具体关键词】
+- 论文数量：5 篇
+- 输出目录：项目根目录
+
+## 流水线阶段
+1. 论文爬取 → papers.json + papers/*.pdf
+2. PDF 解析 → parsed_papers/*/_structured.json
+3. 数据合成 → qa_pairs.jsonl + knowledge_triples.jsonl + summaries.json
+4. 数据质检 → passed.jsonl + flagged.jsonl + quality_report.json
+5. 输出 pipeline_report.json`,
+  },
+  "Sci-Evo 生成专家": {
+    title: "Sci-Evo 数据生成 — 【替换为论文标识】",
+    description: `## 生成范围
+- 输入目录：parsed_papers/
+- 输出目录：sci_evo_data/
+
+## 工作要求
+1. 读取 _structured.json 和 output.md，一次处理一篇论文
+2. 分析论文科研闭环：问题 → 假设 → 方法 → 验证 → 结论
+3. 生成 5-8 个 trajectory step，thought 含 [Background][Gap][Decision]
+4. action 类型：theoretical_derivation / algorithm_design / simulation / experimental_validation / parameter_tuning
+5. 输出 sci_evo_data/Sci-Evo_<paper_id>.json
+6. 验证 JSON 三段式结构完整性`,
+  },
+};
+
+function getAgentPreset(agent: Agent | undefined): { title: string; description: string } {
+  if (!agent) return { title: "", description: "" };
+  const preset = AGENT_PRESETS[agent.name];
+  if (preset) return preset;
+  // Fallback: generate from agent metadata
+  return {
+    title: `${agent.name} — 【替换为任务描述】`,
+    description: `## 任务说明\n使用 ${agent.name} 完成以下工作：\n\n【请替换为具体任务描述，至少 10 个字符】`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -118,12 +216,20 @@ function validate(form: FormState): FormErrors {
 // Component
 // ---------------------------------------------------------------------------
 
-export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
+export function TaskFormModal({ task, defaultAgentId, onClose }: TaskFormModalProps) {
   const isEdit = !!task;
-  const { agents, projects } = useAppState();
+  const { agents, projects, activeProjectId } = useAppState();
   const dispatch = useAppDispatch();
+  const descFileRef = useRef<HTMLInputElement>(null);
 
   const enabledAgents = [...agents.values()].filter((a) => a.isEnabled);
+
+  // Resolve the initial agent — from drag-drop, or fallback to first enabled agent
+  const initAgentId = task
+    ? task.agentId
+    : (defaultAgentId ?? enabledAgents[0]?.id ?? "");
+  const initAgent = initAgentId ? agents.get(initAgentId) : undefined;
+  const preset = !isEdit && initAgent ? getAgentPreset(initAgent) : null;
 
   const [form, setForm] = useState<FormState>(() => {
     if (task) {
@@ -143,10 +249,10 @@ export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
       };
     }
     return {
-      title: "",
-      description: "",
-      agentId: "",
-      projectId: "",
+      title: preset?.title ?? "",
+      description: preset?.description ?? "",
+      agentId: initAgentId,
+      projectId: activeProjectId ?? "",
       priority: 1,
       tags: [],
       tagInput: "",
@@ -196,8 +302,50 @@ export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
   const hasErrors = Object.values(errors).some((e) => !!e);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      // When changing agentId in create mode, auto-fill title/description preset
+      if (key === "agentId" && !isEdit && typeof value === "string" && value) {
+        const agent = agents.get(value);
+        const p = getAgentPreset(agent);
+        // Only fill if user hasn't customized (still matches old preset or is empty)
+        const oldAgent = prev.agentId ? agents.get(prev.agentId) : undefined;
+        const oldPreset = getAgentPreset(oldAgent);
+        const titleIsDefault = !prev.title || prev.title === oldPreset.title;
+        const descIsDefault = !prev.description || prev.description === oldPreset.description;
+        if (titleIsDefault) next.title = p.title;
+        if (descIsDefault) next.description = p.description;
+      }
+      return next;
+    });
     setSubmitError(null);
+  }
+
+  // File upload for description
+  function handleDescFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = [".txt", ".md", ".markdown"];
+    const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+    if (!allowed.includes(ext)) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result;
+      if (typeof text === "string") {
+        setForm((prev) => {
+          const current = prev.description.trim();
+          return {
+            ...prev,
+            description: current ? `${current}\n\n--- 上传文件: ${file.name} ---\n\n${text}` : text,
+          };
+        });
+        setSubmitError(null);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = "";
   }
 
   function addTag() {
@@ -308,13 +456,30 @@ export function TaskFormModal({ task, onClose }: TaskFormModalProps) {
 
           {/* Description */}
           <label className="form-label">
-            描述
+            <div className="form-label-row">
+              <span>描述</span>
+              <button
+                type="button"
+                className="btn btn-small btn-file-upload"
+                onClick={() => descFileRef.current?.click()}
+                title="上传 .txt 或 .md 文件到描述区域"
+              >
+                上传文件
+              </button>
+              <input
+                ref={descFileRef}
+                type="file"
+                accept=".txt,.md,.markdown"
+                style={{ display: "none" }}
+                onChange={handleDescFileUpload}
+              />
+            </div>
             <textarea
               className={`form-textarea ${errors.description ? "form-input-error" : ""}`}
               value={form.description}
               onChange={(e) => updateField("description", e.target.value)}
               placeholder="任务描述，支持 Markdown 格式（至少 10 个字符）"
-              rows={5}
+              rows={8}
               maxLength={10000}
             />
             <span className="form-count">{form.description.length}/10000</span>

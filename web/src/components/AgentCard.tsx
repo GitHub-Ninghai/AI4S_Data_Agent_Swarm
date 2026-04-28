@@ -43,10 +43,18 @@ interface AgentCardProps {
 export function AgentCard({ agent, isSelected, onSelect, onEdit }: AgentCardProps) {
   const color = STATUS_COLORS[agent.status];
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/agent-id", agent.id);
+    e.dataTransfer.setData("text/plain", agent.name);
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
   return (
     <div
       className={`agent-card ${isSelected ? "agent-card-selected" : ""}`}
       onClick={() => onSelect(agent.id)}
+      onDragStart={handleDragStart}
+      draggable
       style={{ "--agent-status-color": color } as React.CSSProperties}
     >
       <div

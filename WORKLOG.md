@@ -2477,3 +2477,114 @@ Task #97: 前端 — Agent 状态警告
 - TypeScript 类型检查通过
 - 后端 249 测试全部通过
 - 前端 24 测试全部通过
+
+---
+
+## 集成：MinerU PDF 解析 + 双数据类型（Q&A / Sci-Evo）+ Agent 拖拽创建 Task
+
+**日期**: 2026-04-28
+**状态**: ✅ 完成
+
+### 完成内容
+
+#### 1. 后端基础设施
+
+- **新增 `server/routes/files.ts`** — PDF 文件上传 API
+  - `POST /api/files/upload` — multipart 上传 PDF 到项目 `uploads/` 目录，200MB 限制
+  - `GET /api/files/:projectId` — 列出项目 `uploads/` 和 `papers/` 中已有的 PDF
+  - `DELETE /api/files/:projectId/:fileId` — 删除已上传文件
+
+- **新增 `server/routes/pipeline.ts`** — 数据流水线创建 API
+  - `POST /api/pipeline/create` — 按 pipelineType（qa/scievo）查模板，找对应 Agent，创建关联 Task 链
+  - Q&A 流水线 3 步：PDF 解析 → 数据合成 → 质检
+  - Sci-Evo 流水线 2 步：PDF 解析 → Sci-Evo 生成
+
+- **修改 `server/app.ts`** — 挂载 filesRouter 和 pipelineRouter
+- **修改 `server/store/types.ts`** — Task 增加 `pipelineType` 和 `inputFiles` 字段
+- **修改 `server/routes/tasks.ts`** — POST 创建 Task 时解构新字段
+- **安装依赖** — multer + @types/multer
+
+#### 2. 新增 Sci-Evo 生成专家 Agent
+
+- **修改 `web/src/store/AppContext.tsx`** — PRESET_AGENTS 新增第 6 个 Agent「Sci-Evo 生成专家」
+  - 头像：🧬，maxTurns: 150，maxBudgetUsd: 5.0
+  - 完整 prompt：三段式 JSON Schema、thought 结构、action 类型映射、验证脚本
+- 通过 API 将数据库中的 Agent 同步更新
+
+#### 3. Copilot 集成
+
+- **修改 `server/services/copilotActions.ts`**
+  - CopilotActionType 增加 `create_data_pipeline`
+  - 新增 `createDataPipeline()` 函数：按 pipelineType 查模板 → 找 Agent → 创建 Task 链
+- **修改 `server/services/copilotService.ts`**
+  - buildSystemPrompt 能力列表增加「创建数据流水线」
+  - 预设 Agent 模板增加第 6 个「Sci-Evo 生成专家」
+  - Tool definition enum 增加 `create_data_pipeline`
+
+#### 4. 前端 UI
+
+- **修改 `web/src/types.ts`** — 新增 PipelineType、UploadedFile、CreateDataPipelineParams
+- **修改 `web/src/api/client.ts`** — 新增 uploadFiles、getProjectFiles、deleteProjectFile、createDataPipeline
+- **新增 `web/src/components/modals/DataPipelineModal.tsx`** — 三步式流水线创建弹窗
+  - Step 1：选择数据类型（Q&A / Sci-Evo 两张卡片）
+  - Step 2：选择 PDF 来源（上传 + 勾选已有）
+  - Step 3：配置确认
+- **修改 `web/src/App.tsx`** — TopBar 增加 "+ Pipeline" 按钮
+
+#### 5. Agent 拖拽到 Task 区域创建 Task
+
+- **修改 `web/src/components/AgentCard.tsx`** — 添加 draggable 属性和 onDragStart，通过 dataTransfer 传递 agentId
+- **修改 `web/src/components/KanbanBoard.tsx`** — 监听 dragOver/dragEnter/dragLeave/drop
+  - 拖入时显示绿色半透明背景 + 虚线边框
+  - 松手后打开 TaskFormModal 并预选 Agent
+- Agent 不会消失，可重复拖拽
+
+#### 6. Task 创建表单预设模板
+
+- **修改 `web/src/components/modals/TaskFormModal.tsx`**
+  - 新增 6 个 Agent 的预设模板（AGENT_PRESETS），拖拽/点击 "+ Task" 均自动填充
+  - 切换 Agent 时智能更新标题和描述（未自定义时跟随切换）
+  - 描述区域新增"上传文件"按钮，支持 .txt/.md/.markdown 文件内容追加
+  - 自动选中 activeProjectId
+  - 点击 "+ Task" 时默认选中第一个 Agent，与拖拽行为保持一致
+
+#### 7. Bug 修复
+
+- **删除 Task 无反应** — Done/Cancelled 状态的 Task 软删除后，前端 `UPDATE_TASK` reducer 未移除 `deleted: true` 的 Task，导致列表不刷新。在 reducer 中增加判断，收到 `deleted: true` 时从 Map 中移除
+- **PDF 解析专家 prompt 规范化** — 移除 pdfplumber 等工具提及，改为"禁止使用任何其他 PDF 解析工具"，同步更新数据库中的 Agent
+
+### 新增文件
+
+| 文件 | 用途 |
+|------|------|
+| `server/routes/files.ts` | PDF 文件上传 API |
+| `server/routes/pipeline.ts` | 数据流水线创建 API |
+| `web/src/components/modals/DataPipelineModal.tsx` | 三步式流水线弹窗 |
+
+### 修改文件
+
+| 文件 | 变更概要 |
+|------|---------|
+| `server/app.ts` | 挂载 filesRouter + pipelineRouter |
+| `server/package.json` | 添加 multer 依赖 |
+| `server/store/types.ts` | Task 增加 pipelineType/inputFiles |
+| `server/routes/tasks.ts` | POST 解构新字段 |
+| `server/services/copilotActions.ts` | 新增 create_data_pipeline |
+| `server/services/copilotService.ts` | Copilot 提示增加流水线能力 |
+| `web/src/types.ts` | 新增 PipelineType/UploadedFile 等 |
+| `web/src/api/client.ts` | 新增 4 个 API 函数 |
+| `web/src/store/AppContext.tsx` | 第 6 个 Agent + 删除修复 |
+| `web/src/App.tsx` | "+ Pipeline" 按钮 |
+| `web/src/components/AgentCard.tsx` | draggable 支持 |
+| `web/src/components/KanbanBoard.tsx` | 拖拽目标区域 |
+| `web/src/components/modals/TaskFormModal.tsx` | 预设模板 + 文件上传 |
+| `web/src/index.css` | 流水线弹窗 + 拖拽 + 文件上传样式 |
+
+### 验证结果
+
+- 后端 TypeScript 编译通过
+- 前端 TypeScript 编译通过
+- 服务启动成功（http://127.0.0.1:3456）
+- Health check API 返回正常
+- 7 个 Agent 全部就绪（含新增 Sci-Evo 生成专家）
+- Vite HMR 热更新正常

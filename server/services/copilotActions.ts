@@ -17,6 +17,7 @@ export type CopilotActionType =
   | "create_agent"
   | "create_task"
   | "create_pipeline"
+  | "create_data_pipeline"
   | "update_agent"
   | "update_task"
   | "query_status";
@@ -62,6 +63,8 @@ export function executeAction(action: CopilotAction): ActionResult {
       return createTask(action.params);
     case "create_pipeline":
       return createPipeline(action.params);
+    case "create_data_pipeline":
+      return createDataPipeline(action.params);
     case "update_agent":
       return updateAgent(action.params);
     case "update_task":
@@ -361,5 +364,135 @@ function queryStatus(params: Record<string, unknown>): ActionResult {
       taskCount: tasks.length,
       projectCount: projects.length,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// create_data_pipeline — 创建预设数据流水线（Q&A / Sci-Evo）
+// ---------------------------------------------------------------------------
+
+type PipelineType = "qa" | "scievo";
+
+interface PipelineStepTemplate {
+  agentName: string;
+  title: string;
+  description: string;
+  maxTurns?: number;
+  maxBudgetUsd?: number;
+}
+
+const DATA_PIPELINE_TEMPLATES: Record<PipelineType, PipelineStepTemplate[]> = {
+  qa: [
+    {
+      agentName: "PDF 解析专家",
+      title: "PDF 解析",
+      description: "使用 MinerU 解析上传的论文 PDF 为结构化 JSON",
+      maxTurns: 150,
+      maxBudgetUsd: 5.0,
+    },
+    {
+      agentName: "数据合成专家",
+      title: "Q&A 数据合成",
+      description: "基于论文解析结果生成 Q&A 训练数据、知识三元组、摘要",
+      maxTurns: 200,
+      maxBudgetUsd: 5.0,
+    },
+    {
+      agentName: "质检专家",
+      title: "数据质检",
+      description: "对合成数据执行质量审核：格式检查、事实验证、去重检测",
+      maxTurns: 100,
+      maxBudgetUsd: 3.0,
+    },
+  ],
+  scievo: [
+    {
+      agentName: "PDF 解析专家",
+      title: "PDF 解析",
+      description: "使用 MinerU 解析上传的论文 PDF 为结构化 JSON",
+      maxTurns: 150,
+      maxBudgetUsd: 5.0,
+    },
+    {
+      agentName: "Sci-Evo 生成专家",
+      title: "Sci-Evo 科学演化数据生成",
+      description: "基于论文解析结果生成 Sci-Evo 三段式 JSON 数据",
+      maxTurns: 150,
+      maxBudgetUsd: 5.0,
+    },
+  ],
+};
+
+function createDataPipeline(params: Record<string, unknown>): ActionResult {
+  const pipelineType = String(params.pipelineType ?? "") as PipelineType;
+  const projectId = String(params.projectId ?? "");
+  const pdfFiles = params.pdfFiles as string[] | undefined;
+
+  if (pipelineType !== "qa" && pipelineType !== "scievo") {
+    return { success: false, message: "pipelineType 必须是 'qa' 或 'scievo'" };
+  }
+
+  if (!projectId) {
+    return { success: false, message: "缺少 projectId" };
+  }
+
+  const project = projectStore.getProjectById(projectId);
+  if (!project) {
+    return { success: false, message: `Project "${projectId}" 不存在` };
+  }
+
+  const steps = DATA_PIPELINE_TEMPLATES[pipelineType];
+  const pdfList = Array.isArray(pdfFiles) ? pdfFiles.join(", ") : "（用户将通过流水线弹窗选择）";
+  const pipelineLabel = pipelineType === "qa" ? "Q&A 训练数据" : "Sci-Evo 科学演化";
+
+  const results: Array<{ taskId: string; title: string }> = [];
+  let parentTaskId: string | undefined;
+
+  for (const step of steps) {
+    const agents = agentStore.getAllAgents();
+    const agent = agents.find((a) => a.name === step.agentName);
+
+    if (!agent) {
+      return {
+        success: false,
+        message: `找不到预置 Agent: "${step.agentName}"`,
+        data: { createdTasks: results },
+      };
+    }
+
+    const now = Date.now();
+    const task: Task = {
+      id: crypto.randomUUID(),
+      title: step.title,
+      description: `${step.description}\n\n流水线类型: ${pipelineLabel}\nPDF 文件: ${pdfList}\n项目路径: ${project.path}`,
+      status: "Todo",
+      agentId: agent.id,
+      projectId,
+      parentTaskId,
+      pipelineType,
+      inputFiles: Array.isArray(pdfFiles) ? pdfFiles : undefined,
+      priority: 1,
+      tags: [pipelineType, "pipeline", step.title],
+      eventCount: 0,
+      turnCount: 0,
+      budgetUsed: 0,
+      maxTurns: step.maxTurns ?? DEFAULT_MAX_TURNS,
+      maxBudgetUsd: step.maxBudgetUsd ?? DEFAULT_MAX_BUDGET_USD,
+      createdAt: now,
+    };
+
+    taskStore.createTask(task);
+    agentStore.updateAgent(agent.id, { taskCount: agent.taskCount + 1 });
+    broadcast("task:update", task);
+    broadcast("agent:update", agentStore.getAgentById(agent.id));
+
+    parentTaskId = task.id;
+    results.push({ taskId: task.id, title: task.title });
+  }
+
+  return {
+    success: true,
+    message: `${pipelineLabel}流水线创建成功，共 ${results.length} 个任务`,
+    data: { tasks: results, pipelineType, projectId },
   };
 }

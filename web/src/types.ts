@@ -203,6 +203,7 @@ export type CopilotActionType =
   | "create_agent"
   | "create_task"
   | "create_pipeline"
+  | "create_data_pipeline"
   | "update_agent"
   | "update_task"
   | "query_status";
@@ -225,4 +226,26 @@ export interface CopilotConfirmResponse {
   success: boolean;
   message: string;
   data?: Record<string, unknown>;
+}
+
+// ---- Data Pipeline ---------------------------------------------------------
+
+export type PipelineType = "qa" | "scievo";
+
+export interface UploadedFile {
+  id: string;
+  name: string;
+  path: string;
+  relativePath: string;
+  size: number;
+  uploadedAt?: number;
+  source?: "uploads" | "papers";
+}
+
+export interface CreateDataPipelineParams {
+  pipelineType: PipelineType;
+  projectId: string;
+  pdfFiles: string[];
+  maxTurns?: number;
+  maxBudgetUsd?: number;
 }

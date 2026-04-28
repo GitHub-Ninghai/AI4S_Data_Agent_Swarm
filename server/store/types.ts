@@ -78,6 +78,8 @@ export interface Task {
   completedAt?: number;
   stuckReason?: string;
   lastEventAt?: number;
+  pipelineType?: "qa" | "scievo";
+  inputFiles?: string[];
 }
 
 // ---- Event -----------------------------------------------------------------

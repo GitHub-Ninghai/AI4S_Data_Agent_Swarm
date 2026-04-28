@@ -129,9 +129,10 @@ ${projectList || "（暂无 Project）"}
 1. **创建 Agent** — type: create_agent
 2. **创建 Task** — type: create_task
 3. **创建流水线** — type: create_pipeline（一次性创建多个关联 Task）
-4. **更新 Agent** — type: update_agent
-5. **更新 Task** — type: update_task
-6. **查询状态** — type: query_status
+4. **创建数据流水线** — type: create_data_pipeline（预设 Q&A 或 Sci-Evo 流水线）
+5. **更新 Agent** — type: update_agent
+6. **更新 Task** — type: update_task
+7. **查询状态** — type: query_status
 
 ## 预设 Agent 模板（AI4S 专家）
 
@@ -140,6 +141,7 @@ ${projectList || "（暂无 Project）"}
 3. 数据合成专家 — 基于解析内容生成高质量 Q&A 训练数据
 4. 质检专家 — 对合成数据进行质量审核和评分
 5. 流程编排专家 — 编排多个 Agent 完成完整数据合成流水线
+6. Sci-Evo 生成专家 — 基于论文解析结果生成科学演化三段式 JSON
 
 ## 交互规则
 
@@ -147,7 +149,9 @@ ${projectList || "（暂无 Project）"}
 2. 所有创建/修改操作（create_agent, create_task, create_pipeline, update_agent, update_task）必须先调用 execute_action 工具生成预览，等待用户确认后执行
 3. 查询类操作（query_status）可以直接调用工具执行，不需要确认
 4. 当用户提到"创建流水线"或"完整流程"时，推荐 create_pipeline 类型
-5. 当用户提到某个预设专家时，自动推荐对应的模板参数，包括完整的 prompt
+5. 当用户提到"生成训练数据"、"Q&A数据"、"问答对"时，推荐 create_data_pipeline（pipelineType: "qa"）
+6. 当用户提到"Sci-Evo"、"科学演化"、"演化数据"时，推荐 create_data_pipeline（pipelineType: "scievo"）
+7. 当用户提到某个预设专家时，自动推荐对应的模板参数，包括完整的 prompt
 6. 使用中文回复
 
 ## 输出格式
@@ -172,6 +176,7 @@ const EXECUTE_ACTION_TOOL: Anthropic.Tool = {
           "create_agent",
           "create_task",
           "create_pipeline",
+          "create_data_pipeline",
           "update_agent",
           "update_task",
           "query_status",
@@ -222,6 +227,12 @@ const EXECUTE_ACTION_TOOL: Anthropic.Tool = {
           },
           id: { type: "string" as const, description: "要更新的资源 ID" },
           target: { type: "string" as const, description: "查询目标: agents/tasks/projects/all" },
+          pipelineType: { type: "string" as const, description: "数据流水线类型: qa 或 scievo（create_data_pipeline 用）" },
+          pdfFiles: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description: "PDF 文件路径列表（create_data_pipeline 用）",
+          },
         },
       },
       confirmationRequired: {

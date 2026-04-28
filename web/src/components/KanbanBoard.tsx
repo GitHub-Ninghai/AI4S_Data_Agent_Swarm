@@ -61,6 +61,7 @@ export function KanbanBoard() {
   const { tasks, activeProjectId, loading, wsConnected } = useAppState();
   const dispatch = useAppDispatch();
   const [modalTask, setModalTask] = useState<Task | "create" | null>(null);
+  const [dragOverAgentId, setDragOverAgentId] = useState<string | null>(null);
 
   // Track WS reconnect for column spinners
   const prevConnectedRef = useRef(wsConnected);
@@ -111,8 +112,59 @@ export function KanbanBoard() {
       .sort((a, b) => b.priority - a.priority || b.createdAt - a.createdAt);
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    const agentId = e.dataTransfer.types.includes("application/agent-id");
+    if (agentId) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    const agentId = e.dataTransfer.types.includes("application/agent-id");
+    if (agentId) {
+      e.preventDefault();
+      // Read agentId from dataTransfer — not available on dragEnter in some browsers,
+      // so we just set a flag to indicate an agent is being dragged over
+      setDragOverAgentId("dragging");
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if leaving the kanban root
+    const rect = e.currentTarget.getBoundingClientRect();
+    const { clientX, clientY } = e;
+    if (clientX <= rect.left || clientX >= rect.right || clientY <= rect.top || clientY >= rect.bottom) {
+      setDragOverAgentId(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const agentId = e.dataTransfer.getData("application/agent-id");
+    setDragOverAgentId(null);
+    if (agentId) {
+      // Open create task modal — pass agentId via a special object
+      setModalTask(agentId as unknown as "create");
+    }
+  };
+
+  // Determine if modalTask is an agent-id-based creation
+  const modalAgentId = modalTask !== null && modalTask !== "create" && typeof modalTask === "string"
+    ? (modalTask as unknown as string)
+    : undefined;
+  // The actual value to pass to TaskFormModal
+  const effectiveModalTask = modalAgentId ? undefined : (modalTask === "create" ? undefined : modalTask);
+  const showModal = modalTask !== null;
+
   return (
-    <div className="kanban">
+    <div
+      className={`kanban ${dragOverAgentId ? "kanban-drag-over" : ""}`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="kanban-header">
         <span className="kanban-title">Tasks</span>
         <button className="btn btn-small" onClick={() => setModalTask("create")}>
@@ -167,9 +219,10 @@ export function KanbanBoard() {
         })}
       </div>
 
-      {modalTask !== null && (
+      {showModal && (
         <TaskFormModal
-          task={modalTask === "create" ? undefined : modalTask}
+          task={effectiveModalTask as Task | undefined}
+          defaultAgentId={modalAgentId}
           onClose={() => setModalTask(null)}
         />
       )}

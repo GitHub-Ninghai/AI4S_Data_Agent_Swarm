@@ -5,6 +5,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailPanel } from "./components/DetailPanel";
 import { NotificationToast } from "./components/NotificationToast";
 import { ProjectFormModal } from "./components/modals/ProjectFormModal";
+import { DataPipelineModal } from "./components/modals/DataPipelineModal";
 import type { Project } from "./types";
 
 const MIN_WIDTH = 1280;
@@ -52,6 +53,7 @@ function TopBar() {
   const { projects, activeProjectId } = useAppState();
   const dispatch = useAppDispatch();
   const [modalProject, setModalProject] = useState<Project | "create" | null>(null);
+  const [showPipelineModal, setShowPipelineModal] = useState(false);
 
   return (
     <header className="top-bar">
@@ -92,6 +94,12 @@ function TopBar() {
         >
           + Project
         </button>
+        <button
+          className="btn btn-small top-bar-add-btn"
+          onClick={() => setShowPipelineModal(true)}
+        >
+          + Pipeline
+        </button>
       </div>
 
       {modalProject !== null && (
@@ -99,6 +107,10 @@ function TopBar() {
           project={modalProject === "create" ? undefined : modalProject}
           onClose={() => setModalProject(null)}
         />
+      )}
+
+      {showPipelineModal && (
+        <DataPipelineModal onClose={() => setShowPipelineModal(false)} />
       )}
     </header>
   );
