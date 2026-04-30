@@ -38,7 +38,7 @@ Windows 用户需在 `.env` 中配置 `CLAUDE_CODE_GIT_BASH_PATH=D:\Git\bin\bash
 | 依赖 | 说明 |
 |------|------|
 | Node.js >= 18 | 后端运行时 |
-| Claude Code CLI | AI 执行引擎 |
+| Claude Code CLI | AI 执行引擎（[安装指南](https://docs.anthropic.com/en/docs/claude-code/overview)） |
 | Git Bash | Windows 用户必需 |
 
 ---
