@@ -292,21 +292,5 @@ export async function startServer(overridePort?: number): Promise<void> {
   });
 }
 
-// Auto-start when run directly (not when imported by tests)
-const isMainModule =
-  process.argv[1]?.endsWith("index.ts") ||
-  process.argv[1]?.endsWith("index.js") ||
-  process.argv[1]?.includes("tsx");
-
-if (isMainModule) {
-  startServer()
-    .then(() => {
-      // Register signal handlers after server is ready
-      process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-      process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-    })
-    .catch((err) => {
-      console.error("[Agent Swarm] Failed to start server:", err);
-      process.exit(1);
-    });
-}
+// Auto-start is handled by index.ts which imports this module.
+// Tests import app.ts directly and call startServer() themselves.

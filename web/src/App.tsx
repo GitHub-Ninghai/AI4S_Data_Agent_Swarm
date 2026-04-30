@@ -5,7 +5,8 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { DetailPanel } from "./components/DetailPanel";
 import { NotificationToast } from "./components/NotificationToast";
 import { ProjectFormModal } from "./components/modals/ProjectFormModal";
-import { DataPipelineModal } from "./components/modals/DataPipelineModal";
+import { WelcomeScreen } from "./components/WelcomeScreen";
+
 import type { Project } from "./types";
 
 const MIN_WIDTH = 1280;
@@ -53,11 +54,10 @@ function TopBar() {
   const { projects, activeProjectId } = useAppState();
   const dispatch = useAppDispatch();
   const [modalProject, setModalProject] = useState<Project | "create" | null>(null);
-  const [showPipelineModal, setShowPipelineModal] = useState(false);
 
   return (
     <header className="top-bar">
-      <h1 className="top-bar-title">Agent Swarm</h1>
+      <h1 className="top-bar-title">AI4S_Data_Agent_Swarm</h1>
       <div className="top-bar-right">
         <select
           className="project-select"
@@ -94,12 +94,6 @@ function TopBar() {
         >
           + Project
         </button>
-        <button
-          className="btn btn-small top-bar-add-btn"
-          onClick={() => setShowPipelineModal(true)}
-        >
-          + Pipeline
-        </button>
       </div>
 
       {modalProject !== null && (
@@ -107,10 +101,6 @@ function TopBar() {
           project={modalProject === "create" ? undefined : modalProject}
           onClose={() => setModalProject(null)}
         />
-      )}
-
-      {showPipelineModal && (
-        <DataPipelineModal onClose={() => setShowPipelineModal(false)} />
       )}
     </header>
   );
@@ -218,6 +208,12 @@ function AppInner() {
 // ---------------------------------------------------------------------------
 
 export function App() {
+  const [entered, setEntered] = useState(false);
+
+  if (!entered) {
+    return <WelcomeScreen onEnter={() => setEntered(true)} />;
+  }
+
   return (
     <AppProvider>
       <AppInner />

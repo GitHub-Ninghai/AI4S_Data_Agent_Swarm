@@ -2588,3 +2588,71 @@ Task #97: 前端 — Agent 状态警告
 - Health check API 返回正常
 - 7 个 Agent 全部就绪（含新增 Sci-Evo 生成专家）
 - Vite HMR 热更新正常
+
+---
+
+## Task: 项目正式命名 + Landing Page 动态入口 + README 更新
+
+**日期**: 2026-04-30
+**状态**: ✅ 完成
+
+### 完成内容
+
+1. **项目正式命名** — 统一更名为 `AI4S_Data_Agent_Swarm`
+   - TopBar 标题: `Agent Swarm` → `AI4S_Data_Agent_Swarm`
+   - index.html `<title>` 同步更新
+   - README.md 项目名称更新
+
+2. **Landing Page 动态入口页**
+   - 新建 `web/src/components/WelcomeScreen.tsx`
+   - 黑色科技代码风格背景：Canvas 绘制代码雨（Matrix 风格绿色字符流）
+   - 18 个 Agent 节点在背景中随机移动，带脉冲光效和连线动画
+   - Agent 状态动态切换（working/idle/thinking）
+   - 浮动代码片段（如 `await sdk.parse(pdf)`, `pipeline.run(tasks)` 等）
+   - 径向渐变暗角（vignette）增强视觉聚焦
+   - 中央标题带打字机效果逐字显示 `AI4S_Data_Agent_Swarm`
+   - 技术栈标签（Claude Agent SDK / MinerU / React / Node.js）
+   - "开始使用"按钮，悬停发光效果
+   - 点击后进入主工作区
+
+3. **App.tsx 集成**
+   - 新增 `entered` 状态控制 WelcomeScreen ↔ 主页面切换
+   - `AppProvider` 仅在进入主页面后才初始化（避免无谓的 API 请求）
+
+4. **移除 Pipeline 按钮** — 右上角 "+ Pipeline" 按钮及 `DataPipelineModal` 不再使用，已从 App.tsx 中移除
+
+5. **修复后端启动问题**
+   - `server/index.ts` 改为显式调用 `startServer()`（原来依赖 `app.ts` 中不可靠的 `isMainModule` 检测）
+   - `start.js` 中 `tsx watch` 在 Windows `cmd.exe` 下无法正常工作，改为 `npx tsx`
+
+6. **截图更新**
+   - `screenshots/00-landing-page.png` — Landing Page 效果
+   - `screenshots/01-homepage.png` — 主工作区（已更新）
+
+7. **README.md 更新**
+   - 项目名称更新
+   - 新增 Landing Page 预览截图和说明
+
+### 修改文件
+
+| 文件 | 变更 |
+|------|------|
+| `web/src/components/WelcomeScreen.tsx` | 新建 — Landing Page 组件 |
+| `web/src/App.tsx` | 集成 WelcomeScreen + 移除 Pipeline + 标题更新 |
+| `web/src/index.css` | 新增 WelcomeScreen 全套样式 |
+| `web/index.html` | `<title>` 更新 |
+| `server/index.ts` | 显式调用 startServer() |
+| `server/app.ts` | 移除不可靠的自动启动检测 |
+| `start.js` | `tsx watch` → `tsx`（修复 Windows 启动问题）|
+| `README.md` | 项目名称 + 截图更新 |
+| `screenshots/00-landing-page.png` | 新增 Landing Page 截图 |
+| `screenshots/01-homepage.png` | 更新主页面截图 |
+
+### 验证结果
+
+- 后端启动成功（http://127.0.0.1:3456）
+- 前端 Vite HMR 编译无错误
+- Landing Page 动画流畅，打字机效果正常
+- 点击"开始使用"正确切换到主工作区
+- 主工作区 TopBar 显示 `AI4S_Data_Agent_Swarm`
+- 7 个 Agent 全部就绪

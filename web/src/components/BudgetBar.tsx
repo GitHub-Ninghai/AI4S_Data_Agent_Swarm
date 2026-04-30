@@ -12,10 +12,10 @@ function getBarColor(pct: number): string {
 }
 
 export function BudgetBar({
-  budgetUsed,
-  maxBudgetUsd,
-  turnCount,
-  maxTurns,
+  budgetUsed = 0,
+  maxBudgetUsd = 0,
+  turnCount = 0,
+  maxTurns = 0,
 }: BudgetBarProps) {
   const budgetPct = maxBudgetUsd > 0 ? Math.min(budgetUsed / maxBudgetUsd, 1) : 0;
   const turnPct = maxTurns > 0 ? Math.min(turnCount / maxTurns, 1) : 0;

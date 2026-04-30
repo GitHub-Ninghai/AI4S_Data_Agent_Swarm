@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>Agent Swarm — AI Agent 编排与可视化平台</strong>
+  <strong>AI4S_Data_Agent_Swarm — AI Agent 编排与可视化平台</strong>
 </p>
 
 <p align="center">
@@ -10,6 +10,14 @@
 ---
 
 ## 平台预览
+
+### Landing Page — 动态入口
+
+![Landing Page](screenshots/00-landing-page.png)
+
+进入应用首先看到黑色科技风格的动态入口页，背景有代码雨和 Agent 节点动画，中央展示项目名称，点击"开始使用"进入工作区。
+
+### 主工作区
 
 ![Homepage](screenshots/01-homepage.png)
 
@@ -151,7 +159,7 @@ node start.js
 ## 项目结构
 
 ```
-Agent Swarm/
+AI4S_Data_Agent_Swarm/
 ├── server/                     # Node.js/Express 后端
 │   ├── index.ts                # 服务入口
 │   ├── app.ts                  # Express 应用配置

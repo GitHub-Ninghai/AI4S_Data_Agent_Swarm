@@ -2619,3 +2619,211 @@ body {
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
+
+/* ---------------------------------------------------------------------------
+ * Welcome Screen — Landing Page
+ * --------------------------------------------------------------------------- */
+
+.welcome-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  overflow: hidden;
+}
+
+.welcome-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.welcome-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
+  pointer-events: none;
+}
+
+.welcome-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  text-align: center;
+  padding: 2rem;
+}
+
+.welcome-line {
+  width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 200, 255, 0.6), transparent);
+  margin-bottom: 2rem;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.welcome-line-bottom {
+  width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.4), transparent);
+  margin-top: 2rem;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.2s;
+}
+
+.welcome-line-visible,
+.welcome-line-bottom.welcome-line-visible {
+  width: 320px;
+}
+
+.welcome-title {
+  font-family: 'Courier New', 'SF Mono', 'Fira Code', monospace;
+  font-size: clamp(1.5rem, 4vw, 3rem);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.08em;
+  text-shadow:
+    0 0 20px rgba(0, 200, 255, 0.5),
+    0 0 40px rgba(0, 200, 255, 0.2),
+    0 0 80px rgba(0, 200, 255, 0.1);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+  margin: 0;
+  min-height: 1.2em;
+}
+
+.welcome-title-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.welcome-cursor {
+  display: inline-block;
+  color: rgba(0, 200, 255, 0.8);
+  animation: cursor-blink 0.8s step-end infinite;
+  margin-left: 2px;
+  font-weight: 300;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.welcome-subtitle {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 1rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  letter-spacing: 0.05em;
+}
+
+.welcome-subtitle-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.welcome-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.6s ease 0.1s, transform 0.6s ease 0.1s;
+}
+
+.welcome-badges-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.welcome-badge {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid rgba(0, 200, 255, 0.2);
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-family: 'Courier New', monospace;
+  color: rgba(0, 200, 255, 0.6);
+  background: rgba(0, 200, 255, 0.05);
+  letter-spacing: 0.03em;
+}
+
+.welcome-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+  padding: 0.875rem 2.5rem;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  border-radius: 8px;
+  background: rgba(0, 255, 136, 0.08);
+  color: rgba(0, 255, 136, 0.9);
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(15px);
+  transition:
+    opacity 0.6s ease 0.2s,
+    transform 0.6s ease 0.2s,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.welcome-btn-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.welcome-btn:hover {
+  background: rgba(0, 255, 136, 0.15);
+  border-color: rgba(0, 255, 136, 0.7);
+  box-shadow:
+    0 0 20px rgba(0, 255, 136, 0.15),
+    0 0 40px rgba(0, 255, 136, 0.05);
+}
+
+.welcome-btn:active {
+  transform: scale(0.97);
+}
+
+.welcome-btn-text {
+  text-transform: uppercase;
+}
+
+.welcome-btn-arrow {
+  font-size: 1.25rem;
+  transition: transform 0.2s ease;
+}
+
+.welcome-btn:hover .welcome-btn-arrow {
+  transform: translateX(4px);
+}
+
+.welcome-version {
+  font-family: 'Courier New', monospace;
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.2);
+  margin-top: 2.5rem;
+  letter-spacing: 0.1em;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
