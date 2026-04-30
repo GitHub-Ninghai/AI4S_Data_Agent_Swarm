@@ -57,7 +57,7 @@ function TopBar() {
 
   return (
     <header className="top-bar">
-      <h1 className="top-bar-title">AI4S_Data_Agent_Swarm</h1>
+      <h1 className="top-bar-title">AI4S Data Agent Swarm</h1>
       <div className="top-bar-right">
         <select
           className="project-select"

@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>AI4S_Data_Agent_Swarm — AI Agent 编排与可视化平台</strong>
+  <strong>AI4S Data Agent Swarm — AI Agent 编排与可视化平台</strong>
 </p>
 
 <p align="center">
@@ -159,7 +159,7 @@ node start.js
 ## 项目结构
 
 ```
-AI4S_Data_Agent_Swarm/
+AI4S Data Agent Swarm/
 ├── server/                     # Node.js/Express 后端
 │   ├── index.ts                # 服务入口
 │   ├── app.ts                  # Express 应用配置

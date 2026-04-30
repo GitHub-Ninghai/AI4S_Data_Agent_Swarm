@@ -65,7 +65,7 @@ export function WelcomeScreen({ onEnter }: Props) {
   const [subtitleVisible, setSubtitleVisible] = useState(false);
   const [btnVisible, setBtnVisible] = useState(false);
   const [typedTitle, setTypedTitle] = useState("");
-  const fullTitle = "AI4S_Data_Agent_Swarm";
+  const fullTitle = "AI4S Data Agent Swarm";
   const typingRef = useRef(0);
 
   // Initialize agent nodes
