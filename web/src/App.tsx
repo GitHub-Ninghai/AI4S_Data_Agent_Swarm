@@ -228,10 +228,19 @@ function AppRoutes() {
       "请输入项目名称（仅支持英文、数字、下划线、横杠）："
     );
     if (!name) return;
+
+    // Default to current directory
+    const defaultPath = ".";
+    const projectPath = window.prompt(
+      `请输入项目路径（相对路径会基于服务器目录解析）\n默认: ${defaultPath}`,
+      defaultPath
+    );
+    if (projectPath === null) return; // User cancelled
+
     try {
       await ProjectApi.create({
         name,
-        path: "E:/2026Mineru比赛",
+        path: projectPath || defaultPath,
       });
       const res = await ProjectApi.list();
       if (res) setProjects(res);
