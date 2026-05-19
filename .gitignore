@@ -33,3 +33,5 @@ out/
 *.pdf
 papers/
 web_old/
+workspace/*
+typst/
