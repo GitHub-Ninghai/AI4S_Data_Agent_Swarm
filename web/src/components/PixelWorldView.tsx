@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPixelGame } from "../pixel/main";
 import { worldEventBus } from "../pixel/systems/WorldEventBus";
 import type { Agent, Task, AgentStatus } from "../types";
@@ -37,12 +37,25 @@ function deriveVisualState(agent: Agent, tasks: Task[]): AgentVisualState {
   return "idle";
 }
 
-/** Get the sprite key for an agent. */
+/** All available sprite keys for round-robin assignment. */
+const SPRITE_POOL = [
+  "character-001",
+  "character-002",
+  "character-003",
+  "character-004",
+];
+
+/** Stable sprite assignment based on agent id hash. */
 function getSpriteKey(agent: Agent): string {
-  // Extract short ID suffix for sprite mapping
-  const shortId = agent.id.slice(-3);
-  if (["001", "002"].includes(shortId)) return `character-${shortId}`;
-  return "character-default";
+  // If agent has an explicit avatar field matching a sprite key, use it
+  if (agent.avatar && agent.avatar.startsWith("character-")) {
+    return agent.avatar;
+  }
+  // Deterministic round-robin based on agent id
+  const hash = agent.id
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return SPRITE_POOL[hash % SPRITE_POOL.length];
 }
 
 /** Determine the area ID and target position for an agent. */
@@ -98,27 +111,39 @@ export default function PixelWorldView({
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<ReturnType<typeof createPixelGame> | null>(null);
   const prevAgentIdsRef = useRef<Set<string>>(new Set());
-  const worldConfigRef = useRef<Record<
-    string,
-    { x: number; y: number }[]
-  > | null>(null);
+  const worldConfigRef = useRef<{
+    tagAreaMapping: Record<string, string>;
+    agentSlots: Record<string, { x: number; y: number }[]>;
+  } | null>(null);
+
+  // Track scene readiness so the sync effect re-runs when Phaser is ready.
+  // This fixes the timing issue: sync useEffect fires before scene listeners
+  // are set up, so agents are lost on mount/remount.
+  const [sceneReady, setSceneReady] = useState(false);
 
   // Create Phaser game
   useEffect(() => {
     if (!containerRef.current) return;
+
+    setSceneReady(false);
 
     const game = createPixelGame(containerRef.current);
     gameRef.current = game;
 
     // Listen for scene ready to fetch config
     const unsubReady = worldEventBus.on("scene:ready", () => {
-      // Config is loaded inside Phaser; we also need it in React for position calculations
       fetch("/assets/world/config.json")
         .then(r => r.json())
         .then(cfg => {
-          worldConfigRef.current = cfg.agentSlots;
+          worldConfigRef.current = {
+            tagAreaMapping: cfg.tagAreaMapping || {},
+            agentSlots: cfg.agentSlots || {},
+          };
         })
         .catch(() => {});
+
+      // Signal scene is ready so the sync useEffect re-runs
+      setSceneReady(true);
     });
 
     // Listen for agent clicks from Phaser
@@ -139,6 +164,7 @@ export default function PixelWorldView({
   }, []);
 
   // Sync agents to Phaser
+  // Re-runs when agents/tasks change OR when the scene becomes ready
   useEffect(() => {
     const prevIds = prevAgentIdsRef.current;
     const currentIds = new Set(agents.map(a => a.id));
@@ -151,8 +177,6 @@ export default function PixelWorldView({
           agent,
           tasks,
           worldConfigRef.current
-            ? { tagAreaMapping: {}, agentSlots: worldConfigRef.current }
-            : null
         );
         worldEventBus.emit("agent:added", {
           agentId: agent.id,
@@ -174,8 +198,6 @@ export default function PixelWorldView({
           agent,
           tasks,
           worldConfigRef.current
-            ? { tagAreaMapping: {}, agentSlots: worldConfigRef.current }
-            : null
         );
         worldEventBus.emit("agent:updated", {
           agentId: agent.id,
@@ -201,7 +223,7 @@ export default function PixelWorldView({
     }
 
     prevAgentIdsRef.current = currentIds;
-  }, [agents, tasks]);
+  }, [agents, tasks, sceneReady]);
 
   // Focus on selected agent
   useEffect(() => {

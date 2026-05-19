@@ -29,6 +29,7 @@ interface Props {
   onCreateTask: (agentId?: string) => void;
   onEditTask: (task: Task) => void;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  onRefreshAgents: () => void;
   onOpenAutodata?: () => void;
 }
 
@@ -70,6 +71,7 @@ function TaskCard({
   onSelect,
   onEdit,
   setTasks,
+  onRefreshAgents,
 }: {
   task: Task;
   agent?: Agent;
@@ -77,6 +79,7 @@ function TaskCard({
   onSelect: () => void;
   onEdit: () => void;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  onRefreshAgents: () => void;
 }) {
   const budgetPct = task.maxBudgetUsd
     ? (task.budgetUsed / task.maxBudgetUsd) * 100
@@ -95,6 +98,7 @@ function TaskCard({
       if (action === "delete") {
         await TaskApi.remove(task.id);
         setTasks(prev => prev.filter(t => t.id !== task.id));
+        onRefreshAgents();
         return;
       }
       const apiFn =
@@ -160,16 +164,28 @@ function TaskCard({
       );
     if (task.status === "Stuck")
       return (
-        <button
-          onClick={e => {
-            e.stopPropagation();
-            handleAction("retry");
-          }}
-          className="p-1 rounded-md hover:bg-white/[0.03] transition-colors"
-          title="重试"
-        >
-          <RotateCw size={10} style={{ color: "var(--accent-blue)" }} />
-        </button>
+        <>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              handleAction("stop");
+            }}
+            className="p-1 rounded-md hover:bg-white/[0.03] transition-colors"
+            title="停止"
+          >
+            <Square size={10} style={{ color: "var(--gold)" }} />
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              handleAction("retry");
+            }}
+            className="p-1 rounded-md hover:bg-white/[0.03] transition-colors"
+            title="重试"
+          >
+            <RotateCw size={10} style={{ color: "var(--accent-blue)" }} />
+          </button>
+        </>
       );
     return null;
   };
@@ -364,6 +380,7 @@ export default function KanbanBoard({
   onCreateTask,
   onEditTask,
   setTasks,
+  onRefreshAgents,
   onOpenAutodata,
 }: Props) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -527,6 +544,7 @@ export default function KanbanBoard({
                     onSelect={() => onSelectTask(task.id)}
                     onEdit={() => onEditTask(task)}
                     setTasks={setTasks}
+                    onRefreshAgents={onRefreshAgents}
                   />
                 ))}
                 {colTasks.length === 0 && (

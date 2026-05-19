@@ -29,17 +29,27 @@ function validateName(name: unknown): string | null {
   return null;
 }
 
-function validatePath(projectPath: unknown): string | null {
-  if (typeof projectPath !== "string" || projectPath.length === 0) {
-    return "path is required";
+function resolveProjectPath(
+  projectPath: unknown,
+  projectName: string,
+): { resolved: string } | { error: string } {
+  if (projectPath == null || (typeof projectPath === "string" && projectPath.length === 0)) {
+    // Default: auto-create data/projects/{name} directory
+    const defaultDir = path.resolve(process.cwd(), "data", "projects", projectName);
+    fs.mkdirSync(defaultDir, { recursive: true });
+    return { resolved: defaultDir };
   }
-  if (!path.isAbsolute(projectPath)) {
-    return "path must be an absolute path";
+  if (typeof projectPath !== "string") {
+    return { error: "path must be a string" };
   }
-  if (!fs.existsSync(projectPath)) {
-    return "path does not exist on disk";
+  const resolved = path.isAbsolute(projectPath)
+    ? path.normalize(projectPath)
+    : path.resolve(process.cwd(), projectPath);
+
+  if (!fs.existsSync(resolved)) {
+    return { error: `path does not exist on disk: ${resolved}` };
   }
-  return null;
+  return { resolved };
 }
 
 // ---------------------------------------------------------------------------
@@ -66,10 +76,10 @@ projectsRouter.post("/", (req: AuthRequest, res) => {
     });
   }
 
-  const pathError = validatePath(projectPath);
-  if (pathError) {
+  const pathResult = resolveProjectPath(projectPath, name as string);
+  if ("error" in pathResult) {
     return res.status(400).json({
-      error: { code: "VALIDATION_ERROR", message: pathError },
+      error: { code: "VALIDATION_ERROR", message: pathResult.error },
     });
   }
 
@@ -77,7 +87,7 @@ projectsRouter.post("/", (req: AuthRequest, res) => {
   const project = projectStore.createProject({
     id: crypto.randomUUID(),
     name: name as string,
-    path: projectPath as string,
+    path: pathResult.resolved,
     description: description as string | undefined,
     createdAt: now,
     updatedAt: now,
@@ -113,13 +123,13 @@ projectsRouter.put("/:id", (req, res) => {
   }
 
   if (req.body.path !== undefined) {
-    const pathError = validatePath(req.body.path);
-    if (pathError) {
+    const pathResult = resolveProjectPath(req.body.path, existing.name);
+    if ("error" in pathResult) {
       return res.status(400).json({
-        error: { code: "VALIDATION_ERROR", message: pathError },
+        error: { code: "VALIDATION_ERROR", message: pathResult.error },
       });
     }
-    patch.path = req.body.path;
+    patch.path = pathResult.resolved;
   }
 
   if (req.body.description !== undefined) {

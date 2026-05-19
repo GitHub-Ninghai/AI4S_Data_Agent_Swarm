@@ -62,7 +62,9 @@
   "agentSpriteMapping": {
     "default": "sprites/default.png",
     "001": "sprites/character-001.png",
-    "002": "sprites/character-002.png"
+    "002": "sprites/character-002.png",
+    "003": "sprites/character-003.png",
+    "004": "sprites/character-004.png"
   },
   "agentSlots": {
     "lobby": [

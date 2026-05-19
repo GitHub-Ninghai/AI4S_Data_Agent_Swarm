@@ -406,21 +406,16 @@ tasksRouter.delete("/:id", (req, res) => {
     });
   }
 
-  // Running/Stuck tasks cannot be deleted
+  // Force-stop Running/Stuck tasks before deleting
   if (existing.status === "Running" || existing.status === "Stuck") {
-    return res.status(409).json({
-      error: {
-        code: "TASK_ALREADY_RUNNING",
-        message: "请先停止 Task",
-      },
-    });
+    taskManager.cancelTask(existing.id);
   }
 
   if (existing.status === "Done" || existing.status === "Cancelled") {
     // Soft delete
     taskStore.updateTask(req.params.id, { deletedAt: Date.now() });
   } else {
-    // Hard delete (Todo status)
+    // Hard delete (Todo/Running/Stuck after forced cancel)
     taskStore.deleteTask(req.params.id);
     ownershipStore.revokeOwnership("task", req.params.id as string);
 
@@ -613,7 +608,7 @@ tasksRouter.post("/:id/approve-tool", (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/tasks/:id/retry — retry a completed/cancelled task
+// POST /api/tasks/:id/retry — retry a completed/cancelled/stuck task
 tasksRouter.post("/:id/retry", (req, res) => {
   const existing = taskStore.getTaskById(req.params.id);
   if (!existing) {
@@ -622,13 +617,22 @@ tasksRouter.post("/:id/retry", (req, res) => {
     });
   }
 
-  if (existing.status !== "Done" && existing.status !== "Cancelled") {
+  if (
+    existing.status !== "Done" &&
+    existing.status !== "Cancelled" &&
+    existing.status !== "Stuck"
+  ) {
     return res.status(409).json({
       error: {
         code: "TASK_NOT_RETRYABLE",
-        message: `Task status is ${existing.status}, can only retry Done/Cancelled tasks`,
+        message: `Task status is ${existing.status}, can only retry Done/Cancelled/Stuck tasks`,
       },
     });
+  }
+
+  // For Stuck tasks, cancel first to release agent & session
+  if (existing.status === "Stuck") {
+    taskManager.cancelTask(existing.id);
   }
 
   // Create new task based on existing

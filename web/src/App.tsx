@@ -17,6 +17,7 @@ import {
 import Dashboard from "./components/Dashboard";
 import CapabilityCenter from "./components/capabilities/CapabilityCenter";
 import { showToast } from "./components/NotificationContainer";
+import ProjectFormModal from "./components/modals/ProjectFormModal";
 
 const AVATAR_DEFAULT = "/images/avatar-default.png";
 
@@ -59,6 +60,7 @@ function AppRoutes() {
   const [preselectAgentId, setPreselectAgentId] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
   const [showAutodataModal, setShowAutodataModal] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -224,21 +226,20 @@ function AppRoutes() {
     UserApi.logout().catch(() => {});
   }, []);
 
-  const handleNewProject = useCallback(async () => {
-    const name = window.prompt(
-      "请输入项目名称（仅支持英文、数字、下划线、横杠）："
-    );
-    if (!name) return;
+  const handleNewProject = useCallback(() => {
+    setShowProjectModal(true);
+  }, []);
+
+  const handleSaveProject = useCallback(async (name: string) => {
     try {
-      await ProjectApi.create({
-        name,
-        path: "E:/2026Mineru比赛",
-      });
+      await ProjectApi.create({ name });
       const res = await ProjectApi.list();
       if (res) setProjects(res);
       showToast("success", `项目 "${name}" 创建成功`);
+      setShowProjectModal(false);
     } catch (err) {
       showToast("error", `创建项目失败: ${err}`);
+      throw err;
     }
   }, []);
 
@@ -339,11 +340,22 @@ function AppRoutes() {
   );
 
   return (
-    <Routes>
-      <Route path="/" element={dashboardElement} />
-      <Route path="/dashboard" element={dashboardElement} />
-      <Route path="/capabilities" element={<CapabilityCenter agents={agents} />} />
-    </Routes>
+    <>
+      {showProjectModal && (
+        <ProjectFormModal
+          onClose={() => setShowProjectModal(false)}
+          onSave={handleSaveProject}
+        />
+      )}
+      <Routes>
+        <Route path="/" element={dashboardElement} />
+        <Route path="/dashboard" element={dashboardElement} />
+        <Route
+          path="/capabilities"
+          element={<CapabilityCenter agents={agents} />}
+        />
+      </Routes>
+    </>
   );
 }
 

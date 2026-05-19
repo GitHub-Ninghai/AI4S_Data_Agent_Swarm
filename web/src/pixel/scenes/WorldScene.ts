@@ -13,6 +13,8 @@ const SPRITE_KEYS = [
   "character-default",
   "character-001",
   "character-002",
+  "character-003",
+  "character-004",
 ] as const;
 
 export class WorldScene extends Phaser.Scene {
@@ -96,72 +98,122 @@ export class WorldScene extends Phaser.Scene {
   private registerAnimations(): void {
     for (const spriteKey of SPRITE_KEYS) {
       const prefix = spriteKey;
+      const texture = this.textures.get(spriteKey as string);
+
+      // Helper: register animation only if all referenced frames exist in texture.
+      // frameTotal includes __BASE, so the last valid frame index is frameTotal - 2.
+      const lastFrame = texture.frameTotal - 2;
+
+      const safeCreate = (
+        key: string,
+        frames: Phaser.Types.Animations.AnimationFrameConfig[],
+        frameRate: number,
+        repeat = -1
+      ) => {
+        const allValid = frames.every(f => (f.frame ?? 0) <= lastFrame);
+        if (!allValid) return;
+        this.anims.create({ key, frames, frameRate, repeat });
+      };
+
+      // Actual max animation frame index (excluding __BASE)
+      const maxFrame = Math.max(0, lastFrame);
 
       // Walk Left — Row 0 (frames 0-5)
-      this.anims.create({
-        key: `${prefix}-walk-left`,
-        frames: this.anims.generateFrameNumbers(spriteKey as string, {
+      safeCreate(
+        `${prefix}-walk-left`,
+        this.anims.generateFrameNumbers(spriteKey as string, {
           start: 0,
           end: 5,
         }),
-        frameRate: 8,
-        repeat: -1,
-      });
+        8
+      );
 
       // Walk Down — Row 1 (frames 6-11)
-      this.anims.create({
-        key: `${prefix}-walk-down`,
-        frames: this.anims.generateFrameNumbers(spriteKey as string, {
+      safeCreate(
+        `${prefix}-walk-down`,
+        this.anims.generateFrameNumbers(spriteKey as string, {
           start: 6,
           end: 11,
         }),
-        frameRate: 8,
-        repeat: -1,
-      });
+        8
+      );
 
       // Walk Up — Row 2 (frames 12-17)
-      this.anims.create({
-        key: `${prefix}-walk-up`,
-        frames: this.anims.generateFrameNumbers(spriteKey as string, {
+      safeCreate(
+        `${prefix}-walk-up`,
+        this.anims.generateFrameNumbers(spriteKey as string, {
           start: 12,
           end: 17,
         }),
-        frameRate: 8,
-        repeat: -1,
-      });
+        8
+      );
 
       // Idle — Row 3 (frames 18-21)
-      this.anims.create({
-        key: `${prefix}-idle-down`,
-        frames: [{ key: spriteKey as string, frame: 18 }],
-        frameRate: 1,
-      });
-      this.anims.create({
-        key: `${prefix}-idle-up`,
-        frames: [{ key: spriteKey as string, frame: 19 }],
-        frameRate: 1,
-      });
-      this.anims.create({
-        key: `${prefix}-idle-left`,
-        frames: [{ key: spriteKey as string, frame: 20 }],
-        frameRate: 1,
-      });
-      this.anims.create({
-        key: `${prefix}-idle-right`,
-        frames: [{ key: spriteKey as string, frame: 21 }],
-        frameRate: 1,
-      });
+      safeCreate(
+        `${prefix}-idle-down`,
+        [{ key: spriteKey as string, frame: 18 }],
+        1
+      );
+      safeCreate(
+        `${prefix}-idle-up`,
+        [{ key: spriteKey as string, frame: 19 }],
+        1
+      );
+      safeCreate(
+        `${prefix}-idle-left`,
+        [{ key: spriteKey as string, frame: 20 }],
+        1
+      );
+      safeCreate(
+        `${prefix}-idle-right`,
+        [{ key: spriteKey as string, frame: 21 }],
+        1
+      );
 
       // Work Down — Row 4 (frames 24-29)
-      this.anims.create({
-        key: `${prefix}-work-down`,
-        frames: this.anims.generateFrameNumbers(spriteKey as string, {
+      safeCreate(
+        `${prefix}-work-down`,
+        this.anims.generateFrameNumbers(spriteKey as string, {
           start: 24,
           end: 29,
         }),
-        frameRate: 6,
-        repeat: -1,
-      });
+        6
+      );
+
+      // Fallback: if NO idle animation registered, create idle-down from frame 0
+      if (!this.anims.get(`${prefix}-idle-down`)) {
+        this.anims.create({
+          key: `${prefix}-idle-down`,
+          frames: [{ key: spriteKey as string, frame: 0 }],
+          frameRate: 1,
+        });
+      }
+
+      // Fallback: if NO walk animation registered, create walk-down from available frames
+      if (!this.anims.get(`${prefix}-walk-down`) && maxFrame > 0) {
+        this.anims.create({
+          key: `${prefix}-walk-down`,
+          frames: this.anims.generateFrameNumbers(spriteKey as string, {
+            start: 0,
+            end: maxFrame,
+          }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+
+      // Fallback: if NO work animation registered, reuse walk-down or idle
+      if (!this.anims.get(`${prefix}-work-down`)) {
+        const walkAnim = this.anims.get(`${prefix}-walk-down`);
+        if (walkAnim) {
+          this.anims.create({
+            key: `${prefix}-work-down`,
+            frames: walkAnim.frames,
+            frameRate: 6,
+            repeat: -1,
+          });
+        }
+      }
     }
   }
 

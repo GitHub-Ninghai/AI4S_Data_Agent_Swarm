@@ -373,7 +373,7 @@ export const ProjectApi = {
   /** POST /api/projects — response: { project: {...} } */
   async create(body: {
     name: string;
-    path: string;
+    path?: string;
     description?: string;
   }): Promise<Project> {
     const res = await request<{ project: Project }>(

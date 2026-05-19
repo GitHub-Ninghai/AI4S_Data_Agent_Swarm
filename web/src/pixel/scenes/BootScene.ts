@@ -90,6 +90,18 @@ export class BootScene extends Phaser.Scene {
       "assets/world/sprites/character-002.png",
       { frameWidth, frameHeight }
     );
+
+    this.load.spritesheet(
+      "character-003",
+      "assets/world/sprites/character-003.png",
+      { frameWidth, frameHeight }
+    );
+
+    this.load.spritesheet(
+      "character-004",
+      "assets/world/sprites/character-004.png",
+      { frameWidth, frameHeight }
+    );
   }
 
   create(): void {

@@ -117,6 +117,11 @@ export default function Dashboard(props: Props) {
                 onCreateTask={props.onCreateTask}
                 onEditTask={props.onEditTask}
                 setTasks={props.setTasks}
+                onRefreshAgents={async () => {
+                  const { AgentApi } = await import("../api");
+                  const res = await AgentApi.list();
+                  if (res) props.setAgents(res);
+                }}
                 onOpenAutodata={props.onOpenAutodata}
               />
             ) : (
@@ -176,6 +181,11 @@ export default function Dashboard(props: Props) {
             onEditTask={props.onEditTask}
             onEditAgent={props.onEditAgent}
             setTasks={props.setTasks}
+            onRefreshAgents={async () => {
+              const { AgentApi } = await import("../api");
+              const res = await AgentApi.list();
+              if (res) props.setAgents(res);
+            }}
           />
         </div>
 

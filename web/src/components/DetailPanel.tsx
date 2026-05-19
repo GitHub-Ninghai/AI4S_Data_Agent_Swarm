@@ -35,6 +35,7 @@ interface Props {
   onEditTask: (task: Task) => void;
   onEditAgent: (agent: Agent) => void;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  onRefreshAgents: () => void;
 }
 
 export default function DetailPanel({
@@ -48,6 +49,7 @@ export default function DetailPanel({
   onEditTask,
   onEditAgent,
   setTasks,
+  onRefreshAgents,
 }: Props) {
   const [showCopilot, setShowCopilot] = useState(false);
 
@@ -154,12 +156,14 @@ export default function DetailPanel({
 async function handleTaskAction(
   taskId: string,
   action: "start" | "stop" | "done" | "retry" | "delete",
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>
+  setTasks: React.Dispatch<React.SetStateAction<Task[]>>,
+  onRefreshAgents?: () => void
 ) {
   try {
     if (action === "delete") {
       await TaskApi.remove(taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
+      onRefreshAgents?.();
       return;
     }
     const apiFn =
@@ -376,7 +380,9 @@ function TaskDetail({
       <div className="flex flex-wrap gap-2 pt-2">
         {task.status === "Todo" && (
           <button
-            onClick={() => handleTaskAction(task.id, "start", setTasks)}
+            onClick={() =>
+              handleTaskAction(task.id, "start", setTasks, onRefreshAgents)
+            }
             className="btn-gold text-xs flex items-center gap-1.5 py-1.5 px-3"
           >
             <Play size={12} /> 开始
@@ -385,13 +391,17 @@ function TaskDetail({
         {task.status === "Running" && (
           <>
             <button
-              onClick={() => handleTaskAction(task.id, "stop", setTasks)}
+              onClick={() =>
+                handleTaskAction(task.id, "stop", setTasks, onRefreshAgents)
+              }
               className="btn-ghost text-xs flex items-center gap-1.5 py-1.5 px-3"
             >
               <Square size={12} /> 停止
             </button>
             <button
-              onClick={() => handleTaskAction(task.id, "done", setTasks)}
+              onClick={() =>
+                handleTaskAction(task.id, "done", setTasks, onRefreshAgents)
+              }
               className="btn-gold text-xs flex items-center gap-1.5 py-1.5 px-3"
             >
               <Check size={12} /> 完成
@@ -400,7 +410,9 @@ function TaskDetail({
         )}
         {task.status === "Stuck" && (
           <button
-            onClick={() => handleTaskAction(task.id, "retry", setTasks)}
+            onClick={() =>
+              handleTaskAction(task.id, "retry", setTasks, onRefreshAgents)
+            }
             className="btn-gold text-xs flex items-center gap-1.5 py-1.5 px-3"
           >
             <RotateCw size={12} /> 重试
@@ -413,7 +425,9 @@ function TaskDetail({
           <Pencil size={12} /> 编辑
         </button>
         <button
-          onClick={() => handleTaskAction(task.id, "delete", setTasks)}
+          onClick={() =>
+            handleTaskAction(task.id, "delete", setTasks, onRefreshAgents)
+          }
           className="btn-ghost text-xs flex items-center gap-1.5 py-1.5 px-3"
           style={{
             color: "var(--accent-red)",
