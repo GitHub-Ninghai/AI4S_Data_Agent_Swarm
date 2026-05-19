@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
+import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -112,10 +113,6 @@ function recoverRunningTasks(): void {
 
 function checkDiskSpace(): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require("node:path");
     const dataDir = path.resolve(process.cwd(), "data");
     if (!fs.existsSync(dataDir)) return;
 
