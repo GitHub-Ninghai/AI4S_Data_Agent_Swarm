@@ -323,7 +323,11 @@ export async function startQuery(
   const systemPrompt: Options["systemPrompt"] = {
     type: "preset",
     preset: "claude_code",
-    append: [agent.prompt, capabilityRuntime.promptAppend]
+    append: [
+      agent.prompt,
+      capabilityRuntime.promptAppend,
+      `[Project Working Directory]\nYour current working directory is: ${projectDir}\nAll output files must be written within this directory (or a subdirectory of it). Do NOT create files outside this path.`,
+    ]
       .filter(Boolean)
       .join("\n\n"),
   };
@@ -396,7 +400,11 @@ export async function resumeQuery(
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: [agent.prompt, capabilityRuntime.promptAppend]
+      append: [
+        agent.prompt,
+        capabilityRuntime.promptAppend,
+        `[Project Working Directory]\nYour current working directory is: ${projectDir}\nAll output files must be written within this directory (or a subdirectory of it). Do NOT create files outside this path.`,
+      ]
         .filter(Boolean)
         .join("\n\n"),
     },

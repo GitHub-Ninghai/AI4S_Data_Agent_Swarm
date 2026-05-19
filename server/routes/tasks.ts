@@ -276,11 +276,18 @@ tasksRouter.post("/", (req: AuthRequest, res) => {
     });
   }
 
+  // Auto-inject project working directory into task description
+  // so the agent always knows where to write output files.
+  // This matches the project.path that will be set as cwd in the SDK query.
+  const enrichedDescription = description.includes("Working directory:")
+    ? description
+    : `[Project Working Directory]\n${project.path}\n\n${description}`;
+
   const now = Date.now();
   const task: Task = {
     id: crypto.randomUUID(),
     title,
-    description,
+    description: enrichedDescription,
     status: "Todo",
     agentId,
     projectId,
