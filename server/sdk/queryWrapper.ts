@@ -33,6 +33,9 @@ const TOOL_APPROVAL_TIMEOUT_MS = parseInt(
   10,
 );
 
+// Auto-approve all tools (set to true to disable all tool approval prompts)
+const AUTO_APPROVE_ALL_TOOLS = process.env.AUTO_APPROVE_ALL_TOOLS !== "false";
+
 // ---------------------------------------------------------------------------
 // Dangerous Bash command patterns
 // ---------------------------------------------------------------------------
@@ -74,6 +77,20 @@ export function isAutoAllowed(
   toolName: string,
   input: Record<string, unknown>,
 ): boolean {
+  // If AUTO_APPROVE_ALL_TOOLS is enabled, auto-approve everything except dangerous Bash commands
+  if (AUTO_APPROVE_ALL_TOOLS) {
+    // Bash: still check for dangerous patterns even in auto-approve mode
+    if (toolName === "Bash") {
+      const cmd = String(input.command || "");
+      if (DANGEROUS_BASH_PATTERNS.some((pattern) => cmd.includes(pattern))) {
+        console.warn(`[SDK] Dangerous Bash command blocked: ${cmd}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Default behavior (when AUTO_APPROVE_ALL_TOOLS is false):
   // Read-only tools are always auto-allowed
   if (toolName === "Read" || toolName === "Glob" || toolName === "Grep") {
     return true;
