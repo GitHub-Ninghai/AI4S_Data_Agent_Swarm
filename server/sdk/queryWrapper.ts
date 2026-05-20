@@ -33,6 +33,9 @@ const TOOL_APPROVAL_TIMEOUT_MS = parseInt(
   10,
 );
 
+// Auto-approve all tools (set to true to disable all tool approval prompts)
+const AUTO_APPROVE_ALL_TOOLS = process.env.AUTO_APPROVE_ALL_TOOLS !== "false";
+
 // ---------------------------------------------------------------------------
 // Dangerous Bash command patterns
 // ---------------------------------------------------------------------------
@@ -74,6 +77,20 @@ export function isAutoAllowed(
   toolName: string,
   input: Record<string, unknown>,
 ): boolean {
+  // If AUTO_APPROVE_ALL_TOOLS is enabled, auto-approve everything except dangerous Bash commands
+  if (AUTO_APPROVE_ALL_TOOLS) {
+    // Bash: still check for dangerous patterns even in auto-approve mode
+    if (toolName === "Bash") {
+      const cmd = String(input.command || "");
+      if (DANGEROUS_BASH_PATTERNS.some((pattern) => cmd.includes(pattern))) {
+        console.warn(`[SDK] Dangerous Bash command blocked: ${cmd}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Default behavior (when AUTO_APPROVE_ALL_TOOLS is false):
   // Read-only tools are always auto-allowed
   if (toolName === "Read" || toolName === "Glob" || toolName === "Grep") {
     return true;
@@ -293,7 +310,8 @@ function applyAgentOverrides(options: Options, agent: Agent): void {
   // All Claude Code compatible providers (GLM, DeepSeek, Mimo, MiniMax) use
   // ANTHROPIC_AUTH_TOKEN. Anthropic official uses ANTHROPIC_API_KEY.
   // We set both so the key works regardless of provider.
-  const env: Record<string, string | undefined> = {};
+  // IMPORTANT: Always pass process.env to ensure PATH is available for spawning node.
+  const env: Record<string, string | undefined> = { ...process.env as Record<string, string | undefined> };
   if (agent.apiKey) {
     env.ANTHROPIC_API_KEY = agent.apiKey;
     env.ANTHROPIC_AUTH_TOKEN = agent.apiKey;
@@ -301,9 +319,8 @@ function applyAgentOverrides(options: Options, agent: Agent): void {
   if (agent.apiBaseUrl) {
     env.ANTHROPIC_BASE_URL = agent.apiBaseUrl;
   }
-  if (Object.keys(env).length > 0) {
-    options.env = { ...process.env as Record<string, string | undefined>, ...env };
-  }
+  // Always set env to ensure PATH is inherited, fixing "spawn node ENOENT" error
+  options.env = env;
 }
 
 // ---------------------------------------------------------------------------
