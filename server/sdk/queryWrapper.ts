@@ -293,7 +293,8 @@ function applyAgentOverrides(options: Options, agent: Agent): void {
   // All Claude Code compatible providers (GLM, DeepSeek, Mimo, MiniMax) use
   // ANTHROPIC_AUTH_TOKEN. Anthropic official uses ANTHROPIC_API_KEY.
   // We set both so the key works regardless of provider.
-  const env: Record<string, string | undefined> = {};
+  // IMPORTANT: Always pass process.env to ensure PATH is available for spawning node.
+  const env: Record<string, string | undefined> = { ...process.env as Record<string, string | undefined> };
   if (agent.apiKey) {
     env.ANTHROPIC_API_KEY = agent.apiKey;
     env.ANTHROPIC_AUTH_TOKEN = agent.apiKey;
@@ -301,9 +302,8 @@ function applyAgentOverrides(options: Options, agent: Agent): void {
   if (agent.apiBaseUrl) {
     env.ANTHROPIC_BASE_URL = agent.apiBaseUrl;
   }
-  if (Object.keys(env).length > 0) {
-    options.env = { ...process.env as Record<string, string | undefined>, ...env };
-  }
+  // Always set env to ensure PATH is inherited, fixing "spawn node ENOENT" error
+  options.env = env;
 }
 
 // ---------------------------------------------------------------------------
