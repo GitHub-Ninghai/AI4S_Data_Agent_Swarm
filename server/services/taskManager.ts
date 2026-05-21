@@ -4,6 +4,8 @@ import * as projectStore from "../store/projectStore.js";
 import { sdkSessionManager } from "./sdkSessionManager.js";
 import { broadcast } from "./wsBroadcaster.js";
 import type { Task } from "../store/types.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -13,6 +15,57 @@ const MAX_CONCURRENT_TASKS = parseInt(
   process.env.MAX_CONCURRENT_TASKS || "10",
   10,
 );
+
+// ---------------------------------------------------------------------------
+// Path validation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if a path looks like a Windows path (e.g., C:\, D:\, E:\)
+ */
+function isWindowsPath(p: string): boolean {
+  // Windows absolute paths: C:\, D:\, etc. or UNC paths: \server\share
+  return /^[A-Za-z]:[/\\]/.test(p) || /^\\\\/.test(p);
+}
+
+/**
+ * Check if a path exists on the current filesystem
+ */
+function pathExists(p: string): boolean {
+  try {
+    fs.accessSync(p, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate project path for the current platform.
+ * Returns a valid path or throws an error.
+ */
+function validateProjectPath(projectPath: string): string {
+  // Check if path exists directly
+  if (pathExists(projectPath)) {
+    return projectPath;
+  }
+
+  // Check if it's a Windows path on Mac/Linux
+  if (isWindowsPath(projectPath)) {
+    throw new TaskManagerError(
+      400,
+      "INVALID_PATH_PLATFORM",
+      `项目路径「${projectPath}」是 Windows 路径格式，在当前系统（${process.platform}）上不存在。请更新 Project 设置使用有效的本地路径。`,
+    );
+  }
+
+  // Path doesn't exist and isn't a Windows path - general error
+  throw new TaskManagerError(
+    400,
+    "INVALID_PATH",
+    `项目路径「${projectPath}」不存在。请检查 Project 设置或创建该目录。`,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Custom error
@@ -108,6 +161,9 @@ class TaskManager {
       );
     }
 
+    // Validate project path exists and is accessible on current platform
+    const validatedPath = validateProjectPath(project.path);
+
     // --- All checks passed: perform state transitions ---
 
     taskStore.updateTask(taskId, {
@@ -134,7 +190,7 @@ class TaskManager {
 
     // Start SDK session (consumes stream in background)
     try {
-      await sdkSessionManager.startTask(task, agent, project.path);
+      await sdkSessionManager.startTask(task, agent, validatedPath);
     } catch (err) {
       // Rollback on failure
       taskStore.updateTask(taskId, {
