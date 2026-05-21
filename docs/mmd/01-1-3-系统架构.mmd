@@ -1,0 +1,62 @@
+graph TD
+    subgraph Browser["🖥 Browser"]
+        SPA["React 19 + Vite 7 SPA<br/>localhost:3456 (prod)<br/>localhost:5173 (dev, HMR)"]
+    end
+
+    subgraph Server["Express Server (Node.js 20 :3456)"]
+        subgraph Ingress["接入层"]
+            REST["REST API<br/>/api/*"]
+            WS["WebSocket<br/>/ws"]
+            Hook["Hook API<br/>/event"]
+            Static["Static<br/>web/dist"]
+            
+            %% 强行横向排版
+            REST --- WS --- Hook --- Static
+        end
+
+        Middleware["Middleware: auth.ts (JWT) | cors | express.json(10mb)"]
+
+        subgraph Services["Services 层"]
+            TM["taskManager"]
+            SSM["sdkSessionManager"]
+            EP["eventProcessor"]
+            SD["stuckDetector"]
+            WSB["wsBroadcaster"]
+            CS["copilotService"]
+            AS["autodataService"]
+            WSim["worldSimulator"]
+            LR["logRotator"]
+            
+            %% 强行横向排版
+            TM --- SSM --- EP --- SD --- WSB --- CS --- AS --- WSim --- LR
+        end
+
+        subgraph Store["Store 层 (JSON 持久化)"]
+            AgentS["agentStore ↔ agents.json"]
+            TaskS["taskStore ↔ tasks.json"]
+            ProjS["projectStore ↔ projects.json"]
+            SessS["sessionStore ↔ sessions.json"]
+            UserS["userStore ↔ users.json"]
+            CapS["capabilityStore ↔ capabilities.json"]
+            WorldS["worldStore ↔ world-state.json"]
+            FileS["fileStore ↔ uploads/"]
+            
+            %% 强行横向排版
+            AgentS --- TaskS --- ProjS --- SessS --- UserS --- CapS --- WorldS --- FileS
+        end
+
+        SDK["Claude Agent SDK<br/>@anthropic-ai/claude-agent-sdk<br/>query() → AsyncGenerator&lt;SDKMessage&gt;"]
+
+        Ingress --> Middleware
+        Middleware --> Services
+        Services --> Store
+        Store --> SDK
+    end
+
+    CC["Claude Code CLI<br/>并发 Session 池<br/>独立上下文 · 独立CWD · 独立权限"]
+
+    SPA -->|"HTTP + WS<br/>(Vite proxy /api→:3456)"| Ingress
+    SDK -->|"spawn"| CC
+
+    %% 隐藏所有用于横向排版的辅助线（不影响连线，只把线变成透明）
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 stroke:#0000,stroke-width:0px;

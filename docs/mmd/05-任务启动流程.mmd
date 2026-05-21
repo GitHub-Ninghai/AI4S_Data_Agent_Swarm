@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 前端 (React)
+    participant API as Express API
+    participant TM as taskManager
+    participant SSM as sdkSessionManager
+    participant SDK as Claude Agent SDK
+    participant CC as Claude Code CLI
+
+    User->>Frontend: 创建 Task
+    Frontend->>API: POST /api/tasks
+    API->>API: taskStore 写入 → Todo
+    API-->>Frontend: WebSocket task:update
+
+    User->>Frontend: 点击"启动"
+    Frontend->>API: POST /api/tasks/:id/start
+    API->>TM: startTask()
+    TM->>TM: 验证: Agent.idle + 并发 < MAX
+    TM->>TM: 校验: Project 路径存在 + 平台匹配
+    TM->>SSM: startQuery()
+    SSM->>SDK: query({ prompt, canUseTool, env, ... })
+    SDK->>CC: spawn Session
+    CC-->>SDK: SDKSystemMessage(init) → session_id
+    SDK-->>SSM: 消费 AsyncGenerator
+    SSM-->>TM: Task→Running, Agent→working
+    TM-->>Frontend: WebSocket task:update + event:new

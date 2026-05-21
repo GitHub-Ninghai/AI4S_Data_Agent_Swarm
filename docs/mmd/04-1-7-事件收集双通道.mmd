@@ -1,0 +1,19 @@
+graph LR
+    subgraph SDK["通道 1: SDK Message Stream (主)"]
+        Q["query()"] -->|"AsyncGenerator"| ASM["SDKAssistantMessage"]
+        Q -->|"AsyncGenerator"| SSM["SDKSystemMessage<br/>(init: session_id)"]
+        Q -->|"AsyncGenerator"| SRM["SDKResultMessage"]
+
+        SSM -->|"→ Event(SDKInit)"| EP["eventProcessor"]
+        ASM -->|"→ Event(SDKAssistant)"| EP
+        SRM -->|"→ Event(SDKResult)"| EP
+    end
+
+    subgraph Hook["通道 2: Claude Hooks (补充)"]
+        CC["Claude Code"] -->|"触发 hook"| Shell["eventHook.sh"]
+        Shell -->|"jq 提取字段"| Log["data/logs/hooks.log"]
+        Shell -->|"POST /event"| EP
+    end
+
+    EP -->|"去重"| JSONL["data/events/task-id.jsonl"]
+    EP -->|"推送"| WSB["wsBroadcaster → 前端"]

@@ -1,0 +1,20 @@
+graph TD
+    Tool["SDK 工具调用请求"] --> Auto{"AUTO_APPROVE_ALL_TOOLS<br/>= true ?"}
+
+    Auto -->|"是 (默认)"| BashCheck1{"tool === 'Bash'<br/>且匹配高危模式?"}
+    BashCheck1 -->|"是"| Block["拒绝执行<br/>console.warn 记录<br/>不触发 Stuck"]
+    BashCheck1 -->|"否"| Allow["自动允许 ✓"]
+
+    Auto -->|"否 (严格模式)"| ReadOnly{"Read / Glob /<br/>Grep ?"}
+    ReadOnly -->|"是"| Allow2["自动允许 ✓"]
+    ReadOnly -->|"否"| BashCheck2{"Bash ?"}
+    BashCheck2 -->|"是"| Danger{"匹配高危模式?"}
+    Danger -->|"是"| Block2["拒绝"]
+    Danger -->|"否"| Stuck["→ Stuck 等待审批"]
+    BashCheck2 -->|"否 (Write/Edit/WebFetch)"| Stuck
+
+    Stuck --> Timeout{"5min 超时?"}
+    Timeout -->|"是"| AutoDeny["自动拒绝"]
+    Timeout -->|"否"| UserAction{"用户操作?"}
+    UserAction -->|"approve"| Allow
+    UserAction -->|"deny"| Deny["拒绝执行"]

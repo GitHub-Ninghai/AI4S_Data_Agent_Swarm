@@ -1,0 +1,8 @@
+stateDiagram-v2
+    [*] --> idle: 创建 Agent
+    idle --> working: Task 开始执行
+    working --> stuck: 工具审批等待 / 超时<br/>(默认模式下罕见)
+    stuck --> working: 用户批准 / 发送消息恢复
+    working --> idle: Task 完成或取消
+    idle --> offline: 手动停用 (isEnabled=false)
+    offline --> idle: 手动启用 (isEnabled=true)

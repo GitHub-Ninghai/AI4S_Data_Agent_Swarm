@@ -1,0 +1,83 @@
+erDiagram
+    Project ||--o{ Agent : "1:N"
+    Project ||--o{ Task : "1:N"
+    Agent ||--o{ Task : "1:N (指派)"
+    Task ||--|| Session : "1:1 session_id"
+    Task ||--o{ Event : "1:N 事件流"
+
+    Project {
+        string id PK
+        string name
+        string path "工作目录绝对路径"
+        string description
+        number createdAt
+        number updatedAt
+    }
+
+    Agent {
+        string id PK
+        string name
+        string avatar "emoji/URL"
+        string role "角色描述"
+        string prompt "系统提示词"
+        string isEnabled "boolean"
+        string status "idle|working|stuck|offline"
+        string projectId FK
+        string currentTaskId FK
+        number maxTurns
+        number maxBudgetUsd
+        string allowedTools "array"
+        string model "模型名"
+        string provider "claude|kimi|glm|deepseek|openai"
+        string apiKey "脱敏存储"
+        string apiBaseUrl
+        number taskCount "已完成总数"
+        string stats "json 统计数据"
+    }
+
+    Task {
+        string id PK
+        string title
+        string description "自动注入项目工作目录"
+        string status "Todo|Running|Done|Stuck|Cancelled"
+        string agentId FK
+        string projectId FK
+        string sessionId FK "SDK 会话 1:1"
+        string parentTaskId FK "重试链"
+        string output "结果摘要"
+        string completedReason "sdk_result|max_turns|max_budget|user_cancelled|error"
+        number priority "0低|1中|2高|3紧急"
+        string tags "array"
+        number eventCount
+        number turnCount
+        number budgetUsed
+        number maxTurns
+        number maxBudgetUsd
+        string stuckReason
+        string pipelineType "qa|scievo|autodata"
+        string inputFiles "array"
+    }
+
+    Session {
+        string id PK
+        string taskId FK
+        string agentId FK
+        string cwd "工作目录"
+        string status "active|paused|completed|killed"
+        number startedAt
+        number endedAt
+    }
+
+    Event {
+        string id PK
+        string taskId FK
+        string sessionId FK
+        string eventType "SDKInit|SDKAssistant|SDKResult|PreToolUse|..."
+        string source "sdk|hook"
+        string toolName
+        string toolInput
+        string toolOutput
+        number duration
+        number timestamp
+        string raw "原始消息 JSON"
+    }

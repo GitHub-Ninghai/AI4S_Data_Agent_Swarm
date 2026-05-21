@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant W1 as Writer 1 (p-queue)
+    participant Lock as proper-lockfile
+    participant FS as 文件系统
+    participant W2 as Writer 2 (p-queue)
+
+    W1->>W1: 进入队列 (concurrency=1)
+    W1->>Lock: 获取文件锁
+    Lock-->>W1: locked
+    W1->>FS: 写入 .tmp 临时文件
+    W1->>FS: fs.rename(.tmp → 正式文件)
+    Note over FS: 原子操作，不会出现半写状态
+    W1->>Lock: 释放文件锁
+    W1-->>W2: 队列释放
+
+    W2->>Lock: 获取文件锁
+    Lock-->>W2: locked
+    W2->>FS: 写入 .tmp
+    W2->>FS: fs.rename(.tmp → 正式文件)
+    W2->>Lock: 释放文件锁

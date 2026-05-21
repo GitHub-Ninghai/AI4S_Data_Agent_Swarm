@@ -1,0 +1,20 @@
+stateDiagram-v2
+    [*] --> Todo: 创建 Task
+    Todo --> Running: POST /start
+    Running --> Done: SDKResult (正常完成)
+    Running --> Stuck: canUseTool 拦截 (严格模式)<br/>API 超时 / 高危命令拦截
+    Stuck --> Running: POST /approve-tool<br/>POST /message (resume)
+    Stuck --> Cancelled: 超时自动拒绝 (5min)
+    Todo --> Cancelled: cancel
+    Running --> Cancelled: cancel
+    Stuck --> Cancelled: cancel
+
+    note right of Stuck
+        恢复方式:
+        1. approve-tool (allow/deny)
+        2. message (发送消息)
+        3. 超时自动拒绝 (5min)
+
+        默认配置下 Stuck 仅在高危命令
+        或 SDK 内部错误时触发
+    end note

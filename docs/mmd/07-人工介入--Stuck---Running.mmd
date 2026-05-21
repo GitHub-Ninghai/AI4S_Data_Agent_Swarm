@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor User as 用户
+    participant SDK as Claude Agent SDK
+    participant SSM as sdkSessionManager
+    participant WS as wsBroadcaster
+
+    SDK->>SSM: canUseTool 回调阻塞
+    SSM->>SSM: Task→Stuck, Agent→stuck
+    SSM->>WS: tool:approval 推送
+
+    User->>SSM: POST /approve-tool { decision }
+    alt allow
+        SSM->>SDK: canUseTool resolve(allow)
+        SDK-->>SSM: 继续执行
+        SSM->>SSM: Task→Running
+    else deny
+        SSM->>SDK: canUseTool resolve(deny)
+    end

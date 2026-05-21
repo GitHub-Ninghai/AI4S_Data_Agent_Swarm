@@ -60,70 +60,7 @@
 
 ### 1.3 系统架构
 
-```mermaid
-graph TD
-    subgraph Browser["🖥 Browser"]
-        SPA["React 19 + Vite 7 SPA<br/>localhost:3456 (prod)<br/>localhost:5173 (dev, HMR)"]
-    end
-
-    subgraph Server["Express Server (Node.js 20 :3456)"]
-        subgraph Ingress["接入层"]
-            REST["REST API<br/>/api/*"]
-            WS["WebSocket<br/>/ws"]
-            Hook["Hook API<br/>/event"]
-            Static["Static<br/>web/dist"]
-            
-            %% 强行横向排版
-            REST --- WS --- Hook --- Static
-        end
-
-        Middleware["Middleware: auth.ts (JWT) | cors | express.json(10mb)"]
-
-        subgraph Services["Services 层"]
-            TM["taskManager"]
-            SSM["sdkSessionManager"]
-            EP["eventProcessor"]
-            SD["stuckDetector"]
-            WSB["wsBroadcaster"]
-            CS["copilotService"]
-            AS["autodataService"]
-            WSim["worldSimulator"]
-            LR["logRotator"]
-            
-            %% 强行横向排版
-            TM --- SSM --- EP --- SD --- WSB --- CS --- AS --- WSim --- LR
-        end
-
-        subgraph Store["Store 层 (JSON 持久化)"]
-            AgentS["agentStore ↔ agents.json"]
-            TaskS["taskStore ↔ tasks.json"]
-            ProjS["projectStore ↔ projects.json"]
-            SessS["sessionStore ↔ sessions.json"]
-            UserS["userStore ↔ users.json"]
-            CapS["capabilityStore ↔ capabilities.json"]
-            WorldS["worldStore ↔ world-state.json"]
-            FileS["fileStore ↔ uploads/"]
-            
-            %% 强行横向排版
-            AgentS --- TaskS --- ProjS --- SessS --- UserS --- CapS --- WorldS --- FileS
-        end
-
-        SDK["Claude Agent SDK<br/>@anthropic-ai/claude-agent-sdk<br/>query() → AsyncGenerator&lt;SDKMessage&gt;"]
-
-        Ingress --> Middleware
-        Middleware --> Services
-        Services --> Store
-        Store --> SDK
-    end
-
-    CC["Claude Code CLI<br/>并发 Session 池<br/>独立上下文 · 独立CWD · 独立权限"]
-
-    SPA -->|"HTTP + WS<br/>(Vite proxy /api→:3456)"| Ingress
-    SDK -->|"spawn"| CC
-
-    %% 隐藏所有用于横向排版的辅助线（不影响连线，只把线变成透明）
-    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 stroke:#0000,stroke-width:0px;
-```
+![系统架构](mmd/01-1-3-系统架构.svg)
 
 ### 1.4 核心组件
 
@@ -144,223 +81,31 @@ graph TD
 
 ### 1.5 核心数据模型
 
-```mermaid
-erDiagram
-    Project ||--o{ Agent : "1:N"
-    Project ||--o{ Task : "1:N"
-    Agent ||--o{ Task : "1:N (指派)"
-    Task ||--|| Session : "1:1 session_id"
-    Task ||--o{ Event : "1:N 事件流"
-
-    Project {
-        string id PK
-        string name
-        string path "工作目录绝对路径"
-        string description
-        number createdAt
-        number updatedAt
-    }
-
-    Agent {
-        string id PK
-        string name
-        string avatar "emoji/URL"
-        string role "角色描述"
-        string prompt "系统提示词"
-        string isEnabled "boolean"
-        string status "idle|working|stuck|offline"
-        string projectId FK
-        string currentTaskId FK
-        number maxTurns
-        number maxBudgetUsd
-        string allowedTools "array"
-        string model "模型名"
-        string provider "claude|kimi|glm|deepseek|openai"
-        string apiKey "脱敏存储"
-        string apiBaseUrl
-        number taskCount "已完成总数"
-        string stats "json 统计数据"
-    }
-
-    Task {
-        string id PK
-        string title
-        string description "自动注入项目工作目录"
-        string status "Todo|Running|Done|Stuck|Cancelled"
-        string agentId FK
-        string projectId FK
-        string sessionId FK "SDK 会话 1:1"
-        string parentTaskId FK "重试链"
-        string output "结果摘要"
-        string completedReason "sdk_result|max_turns|max_budget|user_cancelled|error"
-        number priority "0低|1中|2高|3紧急"
-        string tags "array"
-        number eventCount
-        number turnCount
-        number budgetUsed
-        number maxTurns
-        number maxBudgetUsd
-        string stuckReason
-        string pipelineType "qa|scievo|autodata"
-        string inputFiles "array"
-    }
-
-    Session {
-        string id PK
-        string taskId FK
-        string agentId FK
-        string cwd "工作目录"
-        string status "active|paused|completed|killed"
-        number startedAt
-        number endedAt
-    }
-
-    Event {
-        string id PK
-        string taskId FK
-        string sessionId FK
-        string eventType "SDKInit|SDKAssistant|SDKResult|PreToolUse|..."
-        string source "sdk|hook"
-        string toolName
-        string toolInput
-        string toolOutput
-        number duration
-        number timestamp
-        string raw "原始消息 JSON"
-    }
-```
+![核心数据模型](mmd/02-1-5-核心数据模型.svg)
 
 ### 1.6 Task 状态机
 
-```mermaid
-stateDiagram-v2
-    [*] --> Todo: 创建 Task
-    Todo --> Running: POST /start
-    Running --> Done: SDKResult (正常完成)
-    Running --> Stuck: canUseTool 拦截 (严格模式)<br/>API 超时 / 高危命令拦截
-    Stuck --> Running: POST /approve-tool<br/>POST /message (resume)
-    Stuck --> Cancelled: 超时自动拒绝 (5min)
-    Todo --> Cancelled: cancel
-    Running --> Cancelled: cancel
-    Stuck --> Cancelled: cancel
-
-    note right of Stuck
-        恢复方式:
-        1. approve-tool (allow/deny)
-        2. message (发送消息)
-        3. 超时自动拒绝 (5min)
-
-        默认配置下 Stuck 仅在高危命令
-        或 SDK 内部错误时触发
-    end note
-```
+![Task 状态机](mmd/03-1-6-Task-状态机.svg)
 
 
 
 ### 1.7 事件收集双通道
 
-```mermaid
-graph LR
-    subgraph SDK["通道 1: SDK Message Stream (主)"]
-        Q["query()"] -->|"AsyncGenerator"| ASM["SDKAssistantMessage"]
-        Q -->|"AsyncGenerator"| SSM["SDKSystemMessage<br/>(init: session_id)"]
-        Q -->|"AsyncGenerator"| SRM["SDKResultMessage"]
-
-        SSM -->|"→ Event(SDKInit)"| EP["eventProcessor"]
-        ASM -->|"→ Event(SDKAssistant)"| EP
-        SRM -->|"→ Event(SDKResult)"| EP
-    end
-
-    subgraph Hook["通道 2: Claude Hooks (补充)"]
-        CC["Claude Code"] -->|"触发 hook"| Shell["eventHook.sh"]
-        Shell -->|"jq 提取字段"| Log["data/logs/hooks.log"]
-        Shell -->|"POST /event"| EP
-    end
-
-    EP -->|"去重"| JSONL["data/events/task-id.jsonl"]
-    EP -->|"推送"| WSB["wsBroadcaster → 前端"]
-```
+![事件收集双通道](mmd/04-1-7-事件收集双通道.svg)
 
 ### 1.8 数据流
 
 #### 任务启动流程
 
-```mermaid
-sequenceDiagram
-    actor User as 用户
-    participant Frontend as 前端 (React)
-    participant API as Express API
-    participant TM as taskManager
-    participant SSM as sdkSessionManager
-    participant SDK as Claude Agent SDK
-    participant CC as Claude Code CLI
-
-    User->>Frontend: 创建 Task
-    Frontend->>API: POST /api/tasks
-    API->>API: taskStore 写入 → Todo
-    API-->>Frontend: WebSocket task:update
-
-    User->>Frontend: 点击"启动"
-    Frontend->>API: POST /api/tasks/:id/start
-    API->>TM: startTask()
-    TM->>TM: 验证: Agent.idle + 并发 < MAX
-    TM->>TM: 校验: Project 路径存在 + 平台匹配
-    TM->>SSM: startQuery()
-    SSM->>SDK: query({ prompt, canUseTool, env, ... })
-    SDK->>CC: spawn Session
-    CC-->>SDK: SDKSystemMessage(init) → session_id
-    SDK-->>SSM: 消费 AsyncGenerator
-    SSM-->>TM: Task→Running, Agent→working
-    TM-->>Frontend: WebSocket task:update + event:new
-```
+![任务启动流程](mmd/05-任务启动流程.svg)
 
 #### 工具调用安全管控
 
-```mermaid
-graph TD
-    Tool["SDK 工具调用请求"] --> Auto{"AUTO_APPROVE_ALL_TOOLS<br/>= true ?"}
-
-    Auto -->|"是 (默认)"| BashCheck1{"tool === 'Bash'<br/>且匹配高危模式?"}
-    BashCheck1 -->|"是"| Block["拒绝执行<br/>console.warn 记录<br/>不触发 Stuck"]
-    BashCheck1 -->|"否"| Allow["自动允许 ✓"]
-
-    Auto -->|"否 (严格模式)"| ReadOnly{"Read / Glob /<br/>Grep ?"}
-    ReadOnly -->|"是"| Allow2["自动允许 ✓"]
-    ReadOnly -->|"否"| BashCheck2{"Bash ?"}
-    BashCheck2 -->|"是"| Danger{"匹配高危模式?"}
-    Danger -->|"是"| Block2["拒绝"]
-    Danger -->|"否"| Stuck["→ Stuck 等待审批"]
-    BashCheck2 -->|"否 (Write/Edit/WebFetch)"| Stuck
-
-    Stuck --> Timeout{"5min 超时?"}
-    Timeout -->|"是"| AutoDeny["自动拒绝"]
-    Timeout -->|"否"| UserAction{"用户操作?"}
-    UserAction -->|"approve"| Allow
-    UserAction -->|"deny"| Deny["拒绝执行"]
-```
+![工具调用安全管控](mmd/06-工具调用安全管控.svg)
 
 #### 人工介入 (Stuck → Running)
 
-```mermaid
-sequenceDiagram
-    actor User as 用户
-    participant SDK as Claude Agent SDK
-    participant SSM as sdkSessionManager
-    participant WS as wsBroadcaster
-
-    SDK->>SSM: canUseTool 回调阻塞
-    SSM->>SSM: Task→Stuck, Agent→stuck
-    SSM->>WS: tool:approval 推送
-
-    User->>SSM: POST /approve-tool { decision }
-    alt allow
-        SSM->>SDK: canUseTool resolve(allow)
-        SDK-->>SSM: 继续执行
-        SSM->>SSM: Task→Running
-    else deny
-        SSM->>SDK: canUseTool resolve(deny)
-    end
-```
+![人工介入恢复](mmd/07-人工介入--Stuck---Running.svg)
 
 ---
 
@@ -1045,28 +790,7 @@ data/
 
 所有 JSON 文件写入采用 `safeWrite` 模式，通过 `p-queue` 序列化（concurrency=1），防止并发写入导致数据损坏。
 
-```mermaid
-sequenceDiagram
-    participant W1 as Writer 1 (p-queue)
-    participant Lock as proper-lockfile
-    participant FS as 文件系统
-    participant W2 as Writer 2 (p-queue)
-
-    W1->>W1: 进入队列 (concurrency=1)
-    W1->>Lock: 获取文件锁
-    Lock-->>W1: locked
-    W1->>FS: 写入 .tmp 临时文件
-    W1->>FS: fs.rename(.tmp → 正式文件)
-    Note over FS: 原子操作，不会出现半写状态
-    W1->>Lock: 释放文件锁
-    W1-->>W2: 队列释放
-
-    W2->>Lock: 获取文件锁
-    Lock-->>W2: locked
-    W2->>FS: 写入 .tmp
-    W2->>FS: fs.rename(.tmp → 正式文件)
-    W2->>Lock: 释放文件锁
-```
+![JSON 并发安全](mmd/08-6-3-JSON-文件并发安全机制.svg)
 
 > `.tmp.*` 残留文件是崩溃后的产物，可安全删除：`find data/ -name "*.tmp.*" -delete`
 
@@ -1753,16 +1477,7 @@ POST /api/agents
 
 **Agent 状态流转**：
 
-```mermaid
-stateDiagram-v2
-    [*] --> idle: 创建 Agent
-    idle --> working: Task 开始执行
-    working --> stuck: 工具审批等待 / 超时<br/>(默认模式下罕见)
-    stuck --> working: 用户批准 / 发送消息恢复
-    working --> idle: Task 完成或取消
-    idle --> offline: 手动停用 (isEnabled=false)
-    offline --> idle: 手动启用 (isEnabled=true)
-```
+![Agent 状态流转](mmd/09-9-5-2-创建-Agent.svg)
 
 **成功响应** (201)：包含新创建的 Agent 对象。
 
