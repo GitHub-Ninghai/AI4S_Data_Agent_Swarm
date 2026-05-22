@@ -366,8 +366,8 @@ export async function startQuery(
     abortController,
     systemPrompt,
     cwd: projectDir,
-    maxTurns: task.maxTurns,
-    maxBudgetUsd: task.maxBudgetUsd,
+    maxTurns: task.maxTurns || agent.maxTurns || undefined,
+    maxBudgetUsd: task.maxBudgetUsd || agent.maxBudgetUsd || undefined,
     canUseTool,
     permissionMode: "default",
   };
@@ -381,6 +381,12 @@ export async function startQuery(
   }
 
   applyAgentOverrides(options, agent);
+
+  // Debug log SDK options
+  console.log(`[SDK] Starting query for task ${task.id}:`);
+  console.log(`  - maxTurns: ${options.maxTurns}, maxBudgetUsd: ${options.maxBudgetUsd}`);
+  console.log(`  - model: ${options.model || 'default'}, cwd: ${projectDir}`);
+  console.log(`  - env PATH: ${options.env?.PATH ? 'set' : 'NOT SET (will cause spawn failure)'}`);
 
   const stream = sdkQuery({
     prompt: task.description,
@@ -410,8 +416,8 @@ export async function resumeQuery(
     abortController,
     resume: sessionId,
     cwd: projectDir,
-    maxTurns: task.maxTurns,
-    maxBudgetUsd: task.maxBudgetUsd,
+    maxTurns: task.maxTurns || agent.maxTurns || undefined,
+    maxBudgetUsd: task.maxBudgetUsd || agent.maxBudgetUsd || undefined,
     canUseTool,
     permissionMode: "default",
     systemPrompt: {

@@ -227,6 +227,17 @@ class SDKSessionManager {
     const task = taskStore.getTaskById(taskId);
     if (!task) return;
 
+    // Skip processing if task is already Done (prevent double SDKResult handling)
+    // This happens when SDK sends a success result followed by an error_during_execution
+    if (task.status === "Done" || task.status === "Cancelled") {
+      // Still process events for logging, but skip task completion handling
+      for (const event of events) {
+        eventProcessor.processEvent(event);
+      }
+      console.log(`[SDKSessionManager] Task ${taskId} already ${task.status}, skipping result message processing`);
+      return;
+    }
+
     const turnCount = task.turnCount + events.filter(
       (e: Event) => e.eventType === "SDKAssistant" && e.toolName,
     ).length;
