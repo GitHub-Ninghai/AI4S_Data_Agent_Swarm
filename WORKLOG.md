@@ -3243,3 +3243,72 @@ Task #97: 前端 — Agent 状态警告
 - P3: 相机交互优化 — 点击选择 Agent + 键盘快捷键
 - P4: UI 叠加层完善 — 工具调用气泡、事件通知
 - P5: 制作正式 Tiled 地图（可选）
+
+## Bug Fix: 长时执行任务莫名退出问题排查与修复
+
+**日期**: 2026-05-22
+**状态**: ✅ 完成
+
+### 问题现象
+
+Agent 中的长时执行任务（如搜索论文→下载→解析），执行到一段时间后就莫名其妙退出，没有报错。
+
+### 排查过程
+
+1. **分析事件日志**：发现 SDK 在流式模式下发送了两个 `SDKResult` 消息：
+   - 第一个：`subtype: success`, `num_turns: 24`, 任务正常完成
+   - 第二个：`subtype: error_during_execution`, `errors: ["only prompt commands are supported in streaming mode"]`, `num_turns: 0`
+
+2. **分析 SDK 源码**：在 `@anthropic-ai/claude-agent-sdk` 的 `cli.js` 中发现：
+   ```javascript
+   if(JA.mode!=="prompt"&&JA.mode!=="orphaned-permission")
+     throw Error("only prompt commands are supported in streaming mode");
+   ```
+   SDK 在处理后续命令时，如果模式不是 "prompt"，会抛出此错误。
+
+3. **分析 maxTurns 问题**：任务设置了 `maxTurns=5000`，但执行了49轮就因 `max_turns` 退出。原因是 `task.maxTurns` 和 `agent.maxTurns` 的优先级逻辑不正确。
+
+4. **分析 spawn node ENOENT**：早期错误是因为 `PATH` 环境变量没有正确传递给 SDK 子进程。
+
+### 根因分析
+
+| 问题 | 根因 | 影响 |
+|------|------|------|
+| 双SDKResult消息 | SDK内部状态机在流式模式下发送完成消息后，又发送了错误消息 | 错误消息可能覆盖成功结果 |
+| maxTurns不生效 | Task和Agent的maxTurns逻辑使用直接赋值，0值会导致undefined | Agent的默认50覆盖了Task的5000 |
+| spawn node ENOENT | PATH未传递给SDK子进程 | 早期任务全部失败 |
+
+### 修复内容
+
+1. **sdkSessionManager.ts** — `processSDKMessage` 中添加对已完成任务的过滤：
+   ```typescript
+   if (task.status === "Done" || task.status === "Cancelled") {
+     // 仍然记录事件日志，但跳过任务完成处理
+     for (const event of events) {
+       eventProcessor.processEvent(event);
+     }
+     console.log(`[SDKSessionManager] Task ${taskId} already ${task.status}, skipping result message processing`);
+     return;
+   }
+   ```
+
+2. **queryWrapper.ts** — 改进 maxTurns 和 maxBudgetUsd 参数传递：
+   ```typescript
+   maxTurns: task.maxTurns || agent.maxTurns || undefined,
+   maxBudgetUsd: task.maxBudgetUsd || agent.maxBudgetUsd || undefined,
+   ```
+
+3. **queryWrapper.ts** — 添加 SDK 启动参数的调试日志，便于排查问题。
+
+### 验证结果
+
+| 验证项 | 结果 |
+|--------|------|
+| TypeScript 编译 | ✅ 无错误 |
+| sdkSessionManager 单元测试 | ✅ 9 tests passed |
+| 简单任务执行 | ✅ sdk_result, budgetUsed=0.083 |
+| 事件日志无重复 SDKResult | ✅ 只有一条 SDKResult |
+
+### 下一步
+
+用户可在前端更新 Agent 的 maxTurns 和 maxBudgetUsd 配置，然后测试长时执行任务。
